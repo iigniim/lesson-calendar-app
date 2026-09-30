@@ -258,9 +258,9 @@ body { margin: 0; }
 .paper .lf .i1 { padding-left: 1.6em; }
 .paper .lf .i2 { padding-left: 3.2em; }
 .paper .lf .small { font-size: 13.5px; }
-.paper .lf .sg { padding-left: 27mm; }
+.paper .lf .sg { text-align: center; }
 .paper .lf .ph { padding-left: 20mm; }
-.paper .lf .dt { padding-left: 25mm; }
+.paper .lf .dt { text-align: center; }
 .paper .lf .brand { margin-top: auto; padding-left: 25mm; font-size: 15px; line-height: 8mm; }
 .paper.land { width: 297mm; height: 209mm; padding: 6mm; display: flex; gap: 8mm; }
 .paper.port { width: 210mm; height: 296mm; padding: 13mm 11mm; display: flex; flex-direction: column; }
@@ -353,7 +353,13 @@ body { margin: 0; }
     <label class="fld"><span>날짜</span><input type="date" id="f-date"></label>
     <div class="row2">
       <label class="fld"><span>시작</span><input type="time" id="f-start" step="300"></label>
-      <label class="fld"><span>종료</span><input type="time" id="f-end" step="300"></label>
+      <div class="fld"><span>수업 시간</span>
+        <div class="segs" id="f-dur">
+          <label class="seg"><input type="radio" name="f-dur" value="30"><span>30분</span></label>
+          <label class="seg"><input type="radio" name="f-dur" value="50"><span>50분</span></label>
+        </div>
+      </div>
+      <input type="hidden" id="f-end">
     </div>
     <div class="row2" id="repeat-box">
       <label class="fld"><span>반복</span>
@@ -733,7 +739,7 @@ body { margin: 0; }
   }
 
   /* ---------- sheet ---------- */
-  var dur = 60, delTimer = null;
+  var dur = 50, delTimer = null;
   function setStatusRadio(v) {
     var r = document.querySelector('input[name=status][value=' + v + ']');
     if (r) r.checked = true;
@@ -756,7 +762,7 @@ body { margin: 0; }
     $('#f-title').value = ev ? ev.title : '';
     $('#f-date').value = ev ? ev.date : state.selected;
     $('#f-start').value = ev ? ev.start : '10:00';
-    $('#f-end').value = ev ? ev.end : '11:00';
+    $('#f-end').value = ev ? ev.end : '10:50';
     $('#f-memo').value = ev ? (ev.memo || '') : '';
     $('#f-repeat').value = '0';
     $('#count-box').hidden = true;
@@ -769,7 +775,8 @@ body { margin: 0; }
     $('#btn-del').classList.remove('armed');
     $('#f-msg').hidden = true;
     $('#btn-save').disabled = false;
-    dur = Math.max(5, toMin($('#f-end').value) - toMin($('#f-start').value));
+    dur = toMin($('#f-end').value) - toMin($('#f-start').value) === 30 ? 30 : 50; // lessons are 30 or 50 min
+    document.querySelector('#f-dur input[value="' + dur + '"]').checked = true;
     var names = {};
     state.events.forEach(function (e) { if (e.title) names[e.title] = 1; });
     $('#members').innerHTML = Object.keys(names).sort().map(function (n) { return '<option value="' + esc(n) + '">'; }).join('');
@@ -880,9 +887,10 @@ body { margin: 0; }
     var s = $('#f-start').value; if (!s) return;
     $('#f-end').value = fromMin(toMin(s) + dur); updateNote();
   });
-  $('#f-end').addEventListener('input', function () {
-    var s = $('#f-start').value, en = $('#f-end').value;
-    if (s && en && toMin(en) > toMin(s)) dur = toMin(en) - toMin(s);
+  $('#f-dur').addEventListener('change', function (e) {
+    dur = Number(e.target.value);
+    var s = $('#f-start').value;
+    if (s) $('#f-end').value = fromMin(toMin(s) + dur);
     updateNote();
   });
   $('#f-date').addEventListener('input', updateNote);
@@ -958,15 +966,11 @@ body { margin: 0; }
       return;
     }
     $('#enr-list').innerHTML = list.map(function (e) {
-      var n = lessonsFor(e).length;
-      var pill = n === 0 ? '<span class="pill warn">일정 없음</span>'
-        : n === e.count ? '<span class="pill done">일정 ' + n + '/' + e.count + '</span>'
-        : '<span class="pill info">일정 ' + n + '/' + e.count + '</span>';
       var meta = [dayText(e, '·') || '요일 미정', e.start + '~' + e.end, e.count + '회', fmt(e.fee) + '원'].join(' · ');
       return '<li class="enr" style="--h:' + hue(e.name) + '"><span class="bar"></span>' +
         '<button type="button" class="enr-main" data-eedit="' + esc(e.id) + '">' +
           '<span class="unit">' + esc(e.dong) + '동<small>' + esc(e.ho) + '호</small></span>' +
-          '<span class="who"><b>' + esc(e.name) + '</b><em>' + esc(meta) + '</em>' + pill + '</span>' +
+          '<span class="who"><b>' + esc(e.name) + '</b><em>' + esc(meta) + '</em></span>' +
         '</button>' +
         '<button type="button" class="prt" data-eprint="' + esc(e.id) + '" aria-label="' + esc(e.name) + ' 신청서와 사인지 출력">' + PRINTER + '</button>' +
       '</li>';
