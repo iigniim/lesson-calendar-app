@@ -387,6 +387,19 @@ body { margin: 0; }
       <input type="file" id="file-import" accept="application/json,.json" hidden>
     </div>
     <p class="err" id="backup-msg" role="status" hidden></p>
+    <div id="cloud-out">
+      <p class="help">로그인하면 일정이 클라우드에도 저장돼서 폰을 바꿔도 이어서 쓸 수 있어요.</p>
+      <label class="fld"><span>이메일</span><input type="email" id="c-email" autocomplete="email"></label>
+      <label class="fld"><span>비밀번호 (6자 이상)</span><input type="password" id="c-pass" autocomplete="current-password"></label>
+      <div class="stack">
+        <button type="button" class="btn primary" id="btn-login" style="flex:none">로그인</button>
+        <button type="button" class="btn" id="btn-signup" style="flex:none">회원가입</button>
+      </div>
+    </div>
+    <div id="cloud-in" hidden>
+      <p class="help" id="cloud-who"></p>
+      <div class="stack"><button type="button" class="btn" id="btn-logout" style="flex:none">로그아웃</button></div>
+    </div>
     <div class="actions"><button type="button" class="btn" id="btn-backup-close">닫기</button></div>
   </div>
 </div>
@@ -495,15 +508,15 @@ body { margin: 0; }
     catch (e) { return []; }
   }
   function lsSave() {
-    try { localStorage.setItem(LS, JSON.stringify(state.events)); return true; }
+    try { localStorage.setItem(LS, JSON.stringify(state.events)); pushSoon(); return true; }
     catch (e) { toast('저장 공간이 부족해요. 백업 후 정리해 주세요.'); return false; }
   }
   var saveEvents = lsSave;
   function saveEnr() {
-    try { localStorage.setItem(LS_E, JSON.stringify(state.enrollments)); return true; }
+    try { localStorage.setItem(LS_E, JSON.stringify(state.enrollments)); pushSoon(); return true; }
     catch (e) { toast('저장 공간이 부족해요. 백업 후 정리해 주세요.'); return false; }
   }
-  function saveSettings() { try { localStorage.setItem(LS_S, JSON.stringify(state.settings)); } catch (e) {} }
+  function saveSettings() { try { localStorage.setItem(LS_S, JSON.stringify(state.settings)); pushSoon(); } catch (e) {} }
   function validEnr(e) { return e && typeof e.id === 'string' && typeof e.name === 'string' && /^\d{4}-\d{2}$/.test(e.month || ''); }
   function cleanEnr(e) {
     return {
@@ -537,6 +550,76 @@ body { margin: 0; }
     }
     try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
     render();
+    cloudStart();
+  }
+
+  /* ---------- cloud (Supabase REST, no library): whole data set = one row per user ---------- */
+  // ponytail: last-write-wins on the whole blob; add per-row sync only if two devices edit at once.
+  var SB = 'https://yxeyfcuxwmnjjctllwjc.supabase.co', SB_KEY = 'sb_publishable_QrFHUHo3OVEcQF3NrwvF_w_rHbhct7S';
+  var LS_A = 'lesson-calendar-auth-v1', LS_SYNC = 'lesson-calendar-lastsync-v1';
+  var sess = loadJSON(LS_A, null), pushTimer = null;
+  function blob() { return { app: 'lesson-calendar', version: 2, events: state.events, enrollments: state.enrollments, settings: state.settings }; }
+  async function sb(path, opt, token) {
+    opt = opt || {};
+    opt.headers = Object.assign({ apikey: SB_KEY, 'Content-Type': 'application/json', Authorization: 'Bearer ' + (token || SB_KEY) }, opt.headers);
+    var r = await fetch(SB + path, opt), j = null;
+    try { j = await r.json(); } catch (e) {}
+    if (!r.ok) throw new Error((j && (j.msg || j.error_description || j.message)) || String(r.status));
+    return j;
+  }
+  function setSess(j) {
+    sess = j && j.access_token ? { access: j.access_token, refresh: j.refresh_token, exp: Date.now() + (j.expires_in - 60) * 1000, uid: j.user.id, email: j.user.email } : null;
+    try { if (sess) localStorage.setItem(LS_A, JSON.stringify(sess)); else localStorage.removeItem(LS_A); } catch (e) {}
+    showCloud();
+  }
+  async function token() {
+    if (!sess) return null;
+    if (Date.now() > sess.exp) setSess(await sb('/auth/v1/token?grant_type=refresh_token', { method: 'POST', body: JSON.stringify({ refresh_token: sess.refresh }) }));
+    return sess && sess.access;
+  }
+  async function push() {
+    try {
+      var t = await token(); if (!t) return;
+      var at = new Date().toISOString();
+      await sb('/rest/v1/lesson_calendar_backup?on_conflict=user_id', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify({ user_id: sess.uid, data: blob(), updated_at: at }) }, t);
+      localStorage.setItem(LS_SYNC, at);
+      $('#sync').textContent = '클라우드에 저장됨';
+    } catch (e) { $('#sync').textContent = '이 기기에 저장됨 (클라우드 대기 중)'; }
+  }
+  function pushSoon() { if (!sess) return; clearTimeout(pushTimer); pushTimer = setTimeout(push, 1500); }
+  function adopt(data) {
+    state.events = (data.events || []).filter(validEvent);
+    state.enrollments = (data.enrollments || []).filter(validEnr).map(cleanEnr);
+    if (data.settings) { state.settings.instructor = data.settings.instructor || state.settings.instructor; state.settings.label = data.settings.label || state.settings.label; }
+    lsSave(); saveEnr(); saveSettings(); render();
+  }
+  // Pull once: newer cloud copy replaces this device; otherwise this device is pushed up.
+  async function cloudStart(firstLogin) {
+    if (!sess) return;
+    try {
+      var t = await token();
+      var rows = await sb('/rest/v1/lesson_calendar_backup?select=data,updated_at', {}, t);
+      var mine = state.events.length || state.enrollments.length;
+      var cloudNewer = rows.length && (localStorage.getItem(LS_SYNC) || '') < rows[0].updated_at;
+      if (rows.length && cloudNewer && !(firstLogin && mine)) adopt(rows[0].data);
+      else await push();
+      localStorage.setItem(LS_SYNC, rows.length && cloudNewer && !(firstLogin && mine) ? rows[0].updated_at : localStorage.getItem(LS_SYNC) || '');
+      $('#sync').textContent = '클라우드에 저장됨';
+    } catch (e) { $('#sync').textContent = '이 기기에 저장됨 (오프라인)'; }
+  }
+  function showCloud() {
+    $('#cloud-out').hidden = !!sess; $('#cloud-in').hidden = !sess;
+    if (sess) $('#cloud-who').textContent = sess.email + ' 로그인 중 · 변경할 때마다 자동으로 클라우드에 저장돼요.';
+  }
+  async function auth(signup) {
+    var body = JSON.stringify({ email: $('#c-email').value.trim(), password: $('#c-pass').value });
+    try {
+      var j = await sb(signup ? '/auth/v1/signup' : '/auth/v1/token?grant_type=password', { method: 'POST', body: body });
+      if (!j.access_token) { backupMsg('가입 확인 메일을 보냈어요. 메일의 링크를 누른 뒤 로그인해 주세요.', true); return; }
+      setSess(j); $('#c-pass').value = ''; backupMsg('', true);
+      await cloudStart(true);
+      $('#backup-count').textContent = '저장된 수업 ' + state.events.length + '개 · 신청서 ' + state.enrollments.length + '건';
+    } catch (e) { backupMsg('실패: ' + e.message, false); }
   }
 
   /* ---------- rendering ---------- */
@@ -1220,6 +1303,9 @@ body { margin: 0; }
   $('#open-backup').addEventListener('click', openBackup);
   $('#btn-backup-close').addEventListener('click', closeBackup);
   $('#backup').addEventListener('click', function (e) { if (e.target === $('#backup')) closeBackup(); });
+  $('#btn-login').addEventListener('click', function () { auth(false); });
+  $('#btn-signup').addEventListener('click', function () { auth(true); });
+  $('#btn-logout').addEventListener('click', function () { setSess(null); $('#sync').textContent = '이 기기에 저장됨'; });
   $('#btn-export').addEventListener('click', exportBackup);
   $('#btn-import').addEventListener('click', function () { $('#file-import').click(); });
   $('#file-import').addEventListener('change', function (e) { var f = e.target.files && e.target.files[0]; if (f) importBackup(f); });
@@ -1229,6 +1315,7 @@ body { margin: 0; }
     window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
   }
 
+  showCloud();
   initStore();
 })();
 </script>
