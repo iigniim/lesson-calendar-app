@@ -925,8 +925,10 @@ body { margin: 0; }
     }).sort(function (a, b) { return (a.date + a.start).localeCompare(b.date + b.start); });
   }
   // Count = lessons the member has signed (status done); fee = per-lesson price x count
-  function enrCount(enr) { return lessonsFor(enr).filter(function (l) { return l.status === 'done'; }).length; }
-  function enrFee(enr) { return unitFee(toMin(enr.end) - toMin(enr.start)) * enrCount(enr); }
+  function signedLessons(enr) { return lessonsFor(enr).filter(function (l) { return l.status === 'done'; }); }
+  function enrCount(enr) { return signedLessons(enr).length; }
+  // each lesson is priced by its own calendar length, not the enrollment's default time
+  function enrFee(enr) { return signedLessons(enr).reduce(function (sum, l) { return sum + unitFee(toMin(l.end) - toMin(l.start)); }, 0); }
   function dayText(enr, sep) {
     return ENR_DAYS.filter(function (d) { return enr.days.indexOf(d[0]) >= 0; }).map(function (d) { return d[1]; }).join(sep);
   }
@@ -1161,7 +1163,7 @@ body { margin: 0; }
       '</div>';
   }
   function signPages(enr) {
-    var lessons = lessonsFor(enr), pages = [];
+    var lessons = signedLessons(enr), pages = [];
     for (var p = 0; p === 0 || p * 11 < lessons.length; p++) {
       pages.push('<section class="paper land">' + (p === 0 ? signLeft(enr) : '<div class="pf ghost"></div>') + signRight(enr, lessons.slice(p * 11, p * 11 + 11), p * 11) + '</section>');
     }
