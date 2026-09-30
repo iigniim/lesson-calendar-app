@@ -462,7 +462,13 @@ body { margin: 0; }
     <p class="help" id="g-fee-hint"></p>
     <div class="row2">
       <label class="fld"><span>시작</span><input type="time" id="g-start" step="300"></label>
-      <label class="fld"><span>종료</span><input type="time" id="g-end" step="300"></label>
+      <div class="fld"><span>수업 시간</span>
+        <div class="segs" id="g-dur">
+          <label class="seg"><input type="radio" name="g-dur" value="30"><span>30분</span></label>
+          <label class="seg"><input type="radio" name="g-dur" value="50"><span>50분</span></label>
+        </div>
+      </div>
+      <input type="hidden" id="g-end">
     </div>
     <div id="g-gen-box">
       <label class="chk"><input type="checkbox" id="g-gen" checked><span>달력에 수업 일정 만들기</span></label>
@@ -992,6 +998,11 @@ body { margin: 0; }
       appliedOn: $('#g-applied').value
     };
   }
+  // Lessons are 30 or 50 minutes; show the matching button (anything else falls back to 50)
+  function syncDur() {
+    eState.edur = toMin($('#g-end').value) - toMin($('#g-start').value) === 30 ? 30 : 50;
+    document.querySelector('#g-dur input[value="' + eState.edur + '"]').checked = true;
+  }
   function updateEnrHints() {
     var c = Number($('#g-count').value) || 0, s = $('#g-start').value, e = $('#g-end').value;
     var dur = s && e ? toMin(e) - toMin(s) : 0, u = unitFee(dur), hint = $('#g-fee-hint');
@@ -999,7 +1010,7 @@ body { margin: 0; }
       hint.textContent = dur + '분 수업 ' + fmt(u) + '원 × ' + c + '회 = ' + fmt(u * c) + '원 (직접 고칠 수 있어요)';
       if (!eState.feeDirty) $('#g-fee').value = fmt(u * c);
     } else {
-      hint.textContent = '수업 시간이 50분이나 30분이 아니면 강습료를 직접 입력해 주세요.';
+      hint.textContent = '수업 시간(30분/50분)과 횟수를 넣으면 강습료를 자동으로 계산해요.';
     }
     var tmp = readEnr(), ds = genDates(tmp), note = $('#g-gen-note');
     if (!tmp.days.length) note.textContent = '요일을 고르면 달력에 넣을 날짜를 미리 보여 드려요.';
@@ -1025,7 +1036,7 @@ body { margin: 0; }
     $('#g-start').value = enr ? enr.start : '10:00';
     $('#g-end').value = enr ? enr.end : '10:50';
     $('#g-fee').value = enr ? fmt(enr.fee) : '';
-    eState.edur = Math.max(5, toMin($('#g-end').value) - toMin($('#g-start').value));
+    syncDur();
     var names = {};
     state.enrollments.forEach(function (e) { names[e.name] = 1; });
     $('#g-members').innerHTML = Object.keys(names).sort().map(function (n) { return '<option value="' + esc(n) + '">'; }).join('');
@@ -1060,7 +1071,7 @@ body { margin: 0; }
     if (!document.querySelector('#g-days input:checked')) setDays(prev.days);
     $('#g-count').value = prev.count || 8;
     $('#g-start').value = prev.start; $('#g-end').value = prev.end;
-    eState.edur = Math.max(5, toMin(prev.end) - toMin(prev.start));
+    syncDur();
     eState.feeDirty = false;
     updateEnrHints();
   }
@@ -1120,12 +1131,12 @@ body { margin: 0; }
   function fill(v, cls) { return '<span class="fill' + (cls ? ' ' + cls : '') + '">' + esc(v) + '</span>'; }
   function signLeft(enr) {
     var ps = enr.periodStart ? parse(enr.periodStart) : null, pe = enr.periodEnd ? parse(enr.periodEnd) : null;
-    var ap = enr.appliedOn ? parse(enr.appliedOn) : new Date();
+    var ap = parse(monthBounds(enr.month)[1]); // last day of the lesson month
     var part = function (s, i) { return s ? s.split(':')[i] : ''; };
     var dayList = ENR_DAYS.map(function (d) { return enr.days.indexOf(d[0]) >= 0 ? '<span class="ring">' + d[1] + '</span>' : d[1]; }).join(', ');
     return '<div class="pf lf">' +
       '<h3 class="pt">신 청 서</h3>' +
-      '<p style="padding-left:20mm">' + fill(Number(enr.month.slice(5))) + '월 헬스 <u>소그룹, <span class="ring">개인</span> 강습</u></p>' +
+      '<p style="padding-left:20mm">' + fill(Number(enr.month.slice(5))) + '월 헬스 <u>소그룹, 개인 강습</u></p>' +
       '<p>▶▷ 강습에 대하여 다음 사항을 참조해 주시기 바랍니다.</p>' +
       '<p>1. 한 달 강습 등록 기간은 ' + fill(ps ? ps.getMonth() + 1 : '') + ' / ' + fill(ps ? ps.getDate() : '') + ' 부터 ' + fill(pe ? pe.getMonth() + 1 : '') + ' / ' + fill(pe ? pe.getDate() : '') + ' 까지 입니다.</p>' +
       '<p>2. 강습 요일은 ( ' + dayList + ' ) 이며, 총, ' + fill(enr.count) + ' 회 입니다.</p>' +
@@ -1264,9 +1275,10 @@ body { margin: 0; }
     var s = $('#g-start').value; if (!s) return;
     $('#g-end').value = fromMin(toMin(s) + eState.edur); updateEnrHints();
   });
-  $('#g-end').addEventListener('input', function () {
-    var s = $('#g-start').value, en = $('#g-end').value;
-    if (s && en && toMin(en) > toMin(s)) eState.edur = toMin(en) - toMin(s);
+  $('#g-dur').addEventListener('change', function (e) {
+    eState.edur = Number(e.target.value);
+    var s = $('#g-start').value;
+    if (s) $('#g-end').value = fromMin(toMin(s) + eState.edur);
     updateEnrHints();
   });
   document.addEventListener('keydown', function (e) {
