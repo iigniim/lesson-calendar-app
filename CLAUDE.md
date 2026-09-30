@@ -29,7 +29,7 @@ The owner is learning to code (HTML/CSS basics, moving toward backend/AI enginee
 - An enrollment is one member's 신청서 for one month. Its calendar lessons are events with `enrollmentId`. If an event has no `enrollmentId`, it still counts for the sign sheet when `title === enrollment.name` and the date is in `enrollment.month` (see `lessonsFor`).
 - Sign-sheet rows come from `lessonsFor(enr)` (non-cancelled, sorted by date/time), 11 rows per sheet, extra sheets are added automatically.
 - 강습신청 현황 rows come from `enrOfMonth(key)`: sorted by 동 (A, B, C, ...) then 호수 numerically ascending (`cmpEnr`). 15 rows per page with a 소계 per page, plus 합계 on the last page when there is more than one page.
-- Fee suggestion: lessons are only 30 or 50 minutes (picked with the 수업 시간 buttons, which set `end`): 30 min = 30,000 won, 50 min = 50,000 won, times the lesson count (`unitFee`). The owner can overwrite it; the entered `fee` is what gets printed and summed.
+- Count and fee are computed, not typed: count = the enrollment's lessons that the member signed (`status: "done"`, `enrCount`), fee = 30,000 (30 min) or 50,000 (50 min) per lesson x count (`unitFee`, `enrFee`). Lesson length is picked with the 수업 시간 buttons, which set `end`. The stored `count`/`fee` fields are legacy and ignored.
 - Backup file: `{ app: "lesson-calendar", version: 2, events, enrollments, settings }`. Import also accepts the old version 1 (events only) and merges by `id`. Keep new fields optional so old backups stay valid.
 
 ## The paper forms

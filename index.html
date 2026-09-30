@@ -461,11 +461,7 @@ body { margin: 0; }
         <label class="seg"><input type="checkbox" value="0"><span>일</span></label>
       </div>
     </fieldset>
-    <div class="row2">
-      <label class="fld"><span>총 횟수</span><input type="number" id="g-count" min="1" max="60" inputmode="numeric"></label>
-      <label class="fld"><span>월 강습료 (원)</span><input type="text" id="g-fee" inputmode="numeric" placeholder="400,000"></label>
-    </div>
-    <p class="help" id="g-fee-hint"></p>
+    <p class="help">강습료는 수업 시간(30분 30,000원 / 50분 50,000원)에 회원이 서명한 수업 수를 곱해서 자동으로 계산돼요.</p>
     <div class="row2">
       <label class="fld"><span>시작</span><input type="time" id="g-start" step="300"></label>
       <div class="fld"><span>수업 시간</span>
@@ -928,13 +924,16 @@ body { margin: 0; }
       return e.title === enr.name && e.date.slice(0, 7) === enr.month;
     }).sort(function (a, b) { return (a.date + a.start).localeCompare(b.date + b.start); });
   }
+  // Count = lessons the member has signed (status done); fee = per-lesson price x count
+  function enrCount(enr) { return lessonsFor(enr).filter(function (l) { return l.status === 'done'; }).length; }
+  function enrFee(enr) { return unitFee(toMin(enr.end) - toMin(enr.start)) * enrCount(enr); }
   function dayText(enr, sep) {
     return ENR_DAYS.filter(function (d) { return enr.days.indexOf(d[0]) >= 0; }).map(function (d) { return d[1]; }).join(sep);
   }
   function genDates(enr) {
     var out = [];
     if (!enr.periodStart || !enr.periodEnd || !enr.days.length) return out;
-    for (var s = enr.periodStart; s <= enr.periodEnd && out.length < enr.count; s = addDays(s, 1)) {
+    for (var s = enr.periodStart; s <= enr.periodEnd; s = addDays(s, 1)) {
       if (enr.days.indexOf(parse(s).getDay()) >= 0) out.push(s);
     }
     return out;
@@ -957,8 +956,8 @@ body { margin: 0; }
   var PRINTER = '<svg viewBox="0 0 24 24"><path d="M7 9V4h10v5M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"/><rect x="7" y="14" width="10" height="6" rx="1"/></svg>';
   function renderEnr() {
     var key = monthKey(state.month), list = enrOfMonth(key), m = Number(key.slice(5));
-    var cnt = list.reduce(function (s, e) { return s + e.count; }, 0);
-    var fee = list.reduce(function (s, e) { return s + e.fee; }, 0);
+    var cnt = list.reduce(function (s, e) { return s + enrCount(e); }, 0);
+    var fee = list.reduce(function (s, e) { return s + enrFee(e); }, 0);
     $('#enr-sum').textContent = list.length ? m + '월 신청 ' + list.length + '명 · 총 ' + cnt + '회 · ' + fmt(fee) + '원' : m + '월 신청서가 아직 없어요';
     $('#btn-summary').disabled = !list.length;
     if (!list.length) {
@@ -966,7 +965,7 @@ body { margin: 0; }
       return;
     }
     $('#enr-list').innerHTML = list.map(function (e) {
-      var meta = [dayText(e, '·') || '요일 미정', e.start + '~' + e.end, e.count + '회', fmt(e.fee) + '원'].join(' · ');
+      var meta = [dayText(e, '·') || '요일 미정', e.start + '~' + e.end, enrCount(e) + '회', fmt(enrFee(e)) + '원'].join(' · ');
       return '<li class="enr" style="--h:' + hue(e.name) + '"><span class="bar"></span>' +
         '<button type="button" class="enr-main" data-eedit="' + esc(e.id) + '">' +
           '<span class="unit">' + esc(e.dong) + '동<small>' + esc(e.ho) + '호</small></span>' +
@@ -978,7 +977,7 @@ body { margin: 0; }
   }
 
   /* ---- enrollment sheet ---- */
-  var eState = { editing: null, feeDirty: false, periodDirty: false, edur: 50, armTimer: null };
+  var eState = { editing: null, periodDirty: false, edur: 50, armTimer: null };
   function setDays(list) {
     document.querySelectorAll('#g-days input').forEach(function (i) { i.checked = list.indexOf(Number(i.value)) >= 0; });
   }
@@ -995,10 +994,8 @@ body { margin: 0; }
       periodStart: $('#g-ps').value,
       periodEnd: $('#g-pe').value,
       days: days,
-      count: Math.max(0, Number($('#g-count').value) || 0),
       start: $('#g-start').value,
       end: $('#g-end').value,
-      fee: Number(digits($('#g-fee').value)) || 0,
       appliedOn: $('#g-applied').value
     };
   }
@@ -1008,22 +1005,13 @@ body { margin: 0; }
     document.querySelector('#g-dur input[value="' + eState.edur + '"]').checked = true;
   }
   function updateEnrHints() {
-    var c = Number($('#g-count').value) || 0, s = $('#g-start').value, e = $('#g-end').value;
-    var dur = s && e ? toMin(e) - toMin(s) : 0, u = unitFee(dur), hint = $('#g-fee-hint');
-    if (u && c) {
-      hint.textContent = dur + '분 수업 ' + fmt(u) + '원 × ' + c + '회 = ' + fmt(u * c) + '원 (직접 고칠 수 있어요)';
-      if (!eState.feeDirty) $('#g-fee').value = fmt(u * c);
-    } else {
-      hint.textContent = '수업 시간(30분/50분)과 횟수를 넣으면 강습료를 자동으로 계산해요.';
-    }
     var tmp = readEnr(), ds = genDates(tmp), note = $('#g-gen-note');
     if (!tmp.days.length) note.textContent = '요일을 고르면 달력에 넣을 날짜를 미리 보여 드려요.';
     else if (!ds.length) note.textContent = '등록 기간 안에 고른 요일이 없어요.';
-    else note.textContent = ds.length + '회: ' + ds.map(mdLabel).join(', ') + (ds.length < tmp.count ? ' (기간 안에 해당 요일이 ' + ds.length + '개뿐이에요)' : '');
+    else note.textContent = ds.length + '회: ' + ds.map(mdLabel).join(', ');
   }
   function openEnr(enr) {
     eState.editing = enr ? enr.id : null;
-    eState.feeDirty = !!enr;
     eState.periodDirty = !!enr;
     var key = monthKey(state.month), b = monthBounds(enr ? enr.month : key);
     $('#e-title').textContent = enr ? '신청서 수정' : '신청서 등록';
@@ -1036,10 +1024,8 @@ body { margin: 0; }
     $('#g-ps').value = enr ? enr.periodStart : b[0];
     $('#g-pe').value = enr ? enr.periodEnd : b[1];
     setDays(enr ? enr.days : []);
-    $('#g-count').value = enr ? enr.count : 8;
     $('#g-start').value = enr ? enr.start : '10:00';
     $('#g-end').value = enr ? enr.end : '10:50';
-    $('#g-fee').value = enr ? fmt(enr.fee) : '';
     syncDur();
     var names = {};
     state.enrollments.forEach(function (e) { names[e.name] = 1; });
@@ -1073,10 +1059,8 @@ body { margin: 0; }
     if (!$('#g-ho').value) $('#g-ho').value = prev.ho;
     if (!$('#g-phone').value) $('#g-phone').value = prev.phone;
     if (!document.querySelector('#g-days input:checked')) setDays(prev.days);
-    $('#g-count').value = prev.count || 8;
     $('#g-start').value = prev.start; $('#g-end').value = prev.end;
     syncDur();
-    eState.feeDirty = false;
     updateEnrHints();
   }
   async function saveEnrForm(ev) {
@@ -1087,7 +1071,6 @@ body { margin: 0; }
     if (!enr.ho) return eErr('호수를 입력해 주세요. 예: 101');
     if (!enr.month) return eErr('강습 월을 선택해 주세요.');
     if (!enr.periodStart || !enr.periodEnd || enr.periodEnd < enr.periodStart) return eErr('등록 기간의 시작과 끝을 확인해 주세요.');
-    if (enr.count < 1) return eErr('총 횟수를 1 이상으로 입력해 주세요.');
     if (!enr.start || !enr.end || toMin(enr.end) <= toMin(enr.start)) return eErr('종료 시간이 시작 시간보다 늦어야 해요.');
     var gen = !$('#g-gen-box').hidden && $('#g-gen').checked;
     if (gen && !enr.days.length) return eErr('달력에 일정을 만들려면 강습 요일을 골라 주세요.');
@@ -1103,7 +1086,7 @@ body { margin: 0; }
     var d0 = parse(enr.month + '-01');
     state.month = new Date(d0.getFullYear(), d0.getMonth(), 1);
     closeEnr(); render();
-    toast(gen ? '저장했어요. 달력에 수업 ' + dates.length + '회를 넣었어요' + (dates.length < enr.count ? ' (총 ' + enr.count + '회 중)' : '') : '저장했어요');
+    toast(gen ? '저장했어요. 달력에 수업 ' + dates.length + '회를 넣었어요' : '저장했어요');
   }
   function removeEnr() {
     var b = $('#btn-edel');
@@ -1143,9 +1126,9 @@ body { margin: 0; }
       '<p style="padding-left:20mm">' + fill(Number(enr.month.slice(5))) + '월 헬스 <u>소그룹, 개인 강습</u></p>' +
       '<p>▶▷ 강습에 대하여 다음 사항을 참조해 주시기 바랍니다.</p>' +
       '<p>1. 한 달 강습 등록 기간은 ' + fill(ps ? ps.getMonth() + 1 : '') + ' / ' + fill(ps ? ps.getDate() : '') + ' 부터 ' + fill(pe ? pe.getMonth() + 1 : '') + ' / ' + fill(pe ? pe.getDate() : '') + ' 까지 입니다.</p>' +
-      '<p>2. 강습 요일은 ( ' + dayList + ' ) 이며, 총, ' + fill(enr.count) + ' 회 입니다.</p>' +
+      '<p>2. 강습 요일은 ( ' + dayList + ' ) 이며, 총, ' + fill(enrCount(enr)) + ' 회 입니다.</p>' +
       '<p>3. 강습 시간은 ' + fill(part(enr.start, 0)) + ' : ' + fill(part(enr.start, 1)) + ' ~ ' + fill(part(enr.end, 0)) + ' : ' + fill(part(enr.end, 1)) + ' 입니다.</p>' +
-      '<p>4. 강습료는 월 ' + fill(fmt(enr.fee), 'w') + '원 이며, 매달 관리비에</p>' +
+      '<p>4. 강습료는 월 ' + fill(fmt(enrFee(enr)), 'w') + '원 이며, 매달 관리비에</p>' +
       '<p class="i1">자동 부과 됩니다. (강습료는 후부과 처리 됩니다.)</p>' +
       '<p class="i1">※ 강사와 직접 현금거래로 인한 불이익은 당 스포츠센터는</p>' +
       '<p class="i2">책임지지 않습니다.</p>' +
@@ -1186,7 +1169,7 @@ body { margin: 0; }
   }
   function summaryPages(key) {
     var list = enrOfMonth(key), per = 15, n = Math.max(1, Math.ceil(list.length / per)), m = Number(key.slice(5));
-    var totCount = list.reduce(function (s, e) { return s + e.count; }, 0), totFee = list.reduce(function (s, e) { return s + e.fee; }, 0);
+    var totCount = list.reduce(function (s, e) { return s + enrCount(e); }, 0), totFee = list.reduce(function (s, e) { return s + enrFee(e); }, 0);
     var label = state.settings.label ? ' (' + esc(state.settings.label) + ')' : '';
     var pages = [];
     for (var p = 0; p < n; p++) {
@@ -1194,9 +1177,9 @@ body { margin: 0; }
       for (var i = 0; i < per; i++) {
         var e = part[i];
         rows += '<tr><td>' + (p * per + i + 1) + '</td><td>' + (e ? esc(e.dong) : '') + '</td><td>' + (e ? esc(e.ho) : '') + '</td><td>' + (e ? esc(e.name) : '') +
-          '</td><td class="num">' + (e ? e.count : '') + '</td><td class="num">' + (e ? fmt(e.fee) : '') + '</td><td></td><td></td></tr>';
+          '</td><td class="num">' + (e ? enrCount(e) : '') + '</td><td class="num">' + (e ? fmt(enrFee(e)) : '') + '</td><td></td><td></td></tr>';
       }
-      var sc = part.reduce(function (s, e) { return s + e.count; }, 0), sf = part.reduce(function (s, e) { return s + e.fee; }, 0);
+      var sc = part.reduce(function (s, e) { return s + enrCount(e); }, 0), sf = part.reduce(function (s, e) { return s + enrFee(e); }, 0);
       rows += '<tr><td colspan="4" class="l">소계' + (p + 1) + '</td><td class="num">' + sc + '</td><td class="num">' + fmt(sf) + '</td><td></td><td></td></tr>';
       if (n > 1 && p === n - 1) rows += '<tr class="tot"><td colspan="4" class="l">합계</td><td class="num">' + totCount + '</td><td class="num">' + fmt(totFee) + '</td><td></td><td></td></tr>';
       pages.push('<section class="paper port">' +
@@ -1263,7 +1246,7 @@ body { margin: 0; }
   $('#btn-eclose').addEventListener('click', closeEnr);
   $('#btn-edel').addEventListener('click', removeEnr);
   $('#esheet').addEventListener('click', function (e) { if (e.target === $('#esheet')) closeEnr(); });
-  ['#g-count', '#g-days', '#g-ps', '#g-pe'].forEach(function (s) { $(s).addEventListener('input', updateEnrHints); });
+  ['#g-days', '#g-ps', '#g-pe'].forEach(function (s) { $(s).addEventListener('input', updateEnrHints); });
   $('#g-name').addEventListener('change', function () { autofillFrom($('#g-name').value.trim()); });
   $('#g-month').addEventListener('input', function () {
     var k = $('#g-month').value;
@@ -1271,10 +1254,6 @@ body { margin: 0; }
     updateEnrHints();
   });
   ['#g-ps', '#g-pe'].forEach(function (s) { $(s).addEventListener('input', function () { eState.periodDirty = true; }); });
-  $('#g-fee').addEventListener('input', function () {
-    eState.feeDirty = true;
-    var d = digits($('#g-fee').value); $('#g-fee').value = d ? fmt(Number(d)) : '';
-  });
   $('#g-start').addEventListener('input', function () {
     var s = $('#g-start').value; if (!s) return;
     $('#g-end').value = fromMin(toMin(s) + eState.edur); updateEnrHints();
