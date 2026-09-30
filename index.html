@@ -201,7 +201,6 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 .btn { flex: 1; min-height: 48px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); font-weight: 600; font-size: 15px; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); flex: 2; }
 .btn.danger { color: var(--danger); border-color: var(--danger); flex: 1; }
-.btn.danger.armed { background: var(--danger); color: var(--surface); }
 .btn:disabled { opacity: 0.55; }
 
 .toast {
@@ -455,10 +454,7 @@ body { margin: 0; }
       <label class="fld"><span>호수</span><input type="text" id="g-ho" autocomplete="off" inputmode="numeric" maxlength="8" placeholder="예: 101"></label>
     </div>
     <label class="fld"><span>연락처</span><input type="tel" id="g-phone" autocomplete="off" placeholder="010-0000-0000"></label>
-    <div class="row2">
-      <label class="fld"><span>강습 월</span><input type="month" id="g-month"></label>
-      <label class="fld"><span>신청일</span><input type="date" id="g-applied"></label>
-    </div>
+    <label class="fld"><span>강습 월</span><input type="month" id="g-month"></label>
     <div class="row2">
       <label class="fld"><span>등록 기간 시작</span><input type="date" id="g-ps"></label>
       <label class="fld"><span>등록 기간 끝</span><input type="date" id="g-pe"></label>
@@ -507,6 +503,18 @@ body { margin: 0; }
     <button type="button" class="btn primary" id="pv-print">인쇄</button>
   </div>
   <div class="stage" id="stage"></div>
+</div>
+
+<div class="scrim" id="confm" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="confm-title">
+    <div class="grab"></div>
+    <h2 id="confm-title"></h2>
+    <p id="confm-text"></p>
+    <div class="actions">
+      <button type="button" class="btn" id="confm-no">취소</button>
+      <button type="button" class="btn danger" id="confm-yes"></button>
+    </div>
+  </div>
 </div>
 
 <div class="toast" id="toast" role="status" hidden></div>
@@ -832,6 +840,16 @@ body { margin: 0; }
     }
   }
 
+  // Delete-style popup for every destructive action: resolves true (ok) or false (cancel)
+  function ask(title, text, okLabel) {
+    $('#confm-title').textContent = title; $('#confm-text').textContent = text; $('#confm-yes').textContent = okLabel;
+    $('#confm').hidden = false;
+    return new Promise(function (resolve) {
+      function done(v) { $('#confm').hidden = true; $('#confm-yes').onclick = $('#confm-no').onclick = null; resolve(v); }
+      $('#confm-yes').onclick = function () { done(true); };
+      $('#confm-no').onclick = function () { done(false); };
+    });
+  }
   // Same member's lessons on or after this one (same enrollment, or same name when there is none)
   function lessonsFrom(ev) {
     return state.events.filter(function (x) {
@@ -882,7 +900,7 @@ body { margin: 0; }
       var ev = state.events.find(function (x) { return x.id === id; });
       if (!ev) return;
       if (ev.status === 'done') {
-        if (!confirm('사인을 지우고 예정으로 되돌릴까요?')) return;
+        if (!await ask('사인 삭제', ev.title + ' ' + longDate(ev.date) + ' 사인을 지우고 예정으로 되돌릴까요?', '사인 삭제')) return;
         var back = Object.assign({}, ev, { status: 'scheduled' }); delete back.sign;
         await put(back);
       } else openSign(ev);
@@ -898,7 +916,7 @@ body { margin: 0; }
   $('#add').addEventListener('click', function () { openEnr(null, state.tab === 'enr' ? null : state.selected); });
   $('#btn-close').addEventListener('click', closeSheet);
   $('#sheet').addEventListener('click', function (e) { if (e.target === $('#sheet')) closeSheet(); });
-  document.addEventListener('keydown', function (e) { if (e.key !== 'Escape') return; if (!$('#delm').hidden) $('#delm').hidden = true; else if (!$('#sheet').hidden) closeSheet(); });
+  document.addEventListener('keydown', function (e) { if (e.key !== 'Escape') return; if (!$('#confm').hidden) $('#confm-no').click(); else if (!$('#delm').hidden) $('#delm').hidden = true; else if (!$('#sheet').hidden) closeSheet(); });
   $('#form').addEventListener('submit', saveForm);
   $('#btn-del').addEventListener('click', removeCurrent);
   $('#f-repeat').addEventListener('change', function () { $('#count-box').hidden = $('#f-repeat').value === '0'; });
@@ -1002,7 +1020,7 @@ body { margin: 0; }
   }
 
   /* ---- enrollment sheet ---- */
-  var eState = { editing: null, periodDirty: false, edur: 50, armTimer: null };
+  var eState = { editing: null, periodDirty: false, edur: 50 };
   function setDays(list) {
     document.querySelectorAll('#g-days input').forEach(function (i) { i.checked = list.indexOf(Number(i.value)) >= 0; });
   }
@@ -1020,8 +1038,7 @@ body { margin: 0; }
       periodEnd: $('#g-pe').value,
       days: days,
       start: $('#g-start').value,
-      end: $('#g-end').value,
-      appliedOn: $('#g-applied').value
+      end: $('#g-end').value
     };
   }
   // Lessons are 30 or 50 minutes; show the matching button (anything else falls back to 50)
@@ -1046,7 +1063,6 @@ body { margin: 0; }
     $('#g-ho').value = enr ? enr.ho : '';
     $('#g-phone').value = enr ? enr.phone : '';
     $('#g-month').value = enr ? enr.month : key;
-    $('#g-applied').value = enr ? (enr.appliedOn || ymd(new Date())) : ymd(new Date());
     $('#g-ps').value = enr ? enr.periodStart : b[0];
     $('#g-pe').value = enr ? enr.periodEnd : b[1];
     setDays(enr ? enr.days : date ? [parse(date).getDay()] : []);
@@ -1061,12 +1077,10 @@ body { margin: 0; }
     $('#g-gen').checked = true;
     $('#g-lessons-box').hidden = !lessons.length;
     if (lessons.length) {
-      $('#g-lessons').textContent = '사인지에 들어가는 수업 ' + lessons.length + '회: ' + lessons.map(function (l) { return mdLabel(l.date) + ' ' + l.start; }).join(', ') +
-        '. 날짜나 시간을 바꾸려면 달력에서 그 수업을 수정하세요.';
+      $('#g-lessons').textContent = '달력에 있는 수업 ' + lessons.length + '회: ' + lessons.map(function (l) { return mdLabel(l.date) + ' ' + l.start; }).join(', ') +
+        '. 요일이나 시간을 바꿔 저장하면 서명 안 된 오늘 이후 수업이 새 요일·시간으로 바뀌어요. 서명한 수업은 그대로예요.';
     }
     $('#btn-edel').hidden = !enr;
-    $('#btn-edel').textContent = '삭제';
-    $('#btn-edel').classList.remove('armed');
     $('#g-del-help').hidden = !enr;
     $('#g-msg').hidden = true;
     $('#btn-esave').disabled = false;
@@ -1075,7 +1089,7 @@ body { margin: 0; }
     updateEnrHints();
     if (!enr) setTimeout(function () { $('#g-name').focus(); }, 60);
   }
-  function closeEnr() { $('#esheet').hidden = true; document.body.classList.remove('locked'); clearTimeout(eState.armTimer); }
+  function closeEnr() { $('#esheet').hidden = true; document.body.classList.remove('locked'); }
   function eErr(m) { var e = $('#g-msg'); e.textContent = m; e.hidden = false; }
   function autofillFrom(name) {
     if (eState.editing || !name) return;
@@ -1107,29 +1121,33 @@ body { margin: 0; }
       enr = Object.assign({}, same, { days: same.days.concat(form.days.filter(function (d) { return same.days.indexOf(d) < 0; })) });
     }
     enr.id = eState.editing || (same ? same.id : newId());
+    // editing days/time/period: redo this person's unsigned lessons from today on, signed ones stay
+    var old = eState.editing ? state.enrollments.find(function (e) { return e.id === enr.id; }) : null;
+    var changed = !!old && [old.days.slice().sort().join(), old.start, old.end, old.periodStart, old.periodEnd].join('|') !==
+      [enr.days.slice().sort().join(), enr.start, enr.end, enr.periodStart, enr.periodEnd].join('|');
+    var today = ymd(new Date());
+    if (changed) {
+      state.events = state.events.filter(function (x) {
+        return !(x.enrollmentId === enr.id && x.title === old.name && x.status === 'scheduled' && x.date >= today);
+      });
+      gen = enr.days.length > 0;
+    }
     var dates = gen ? genDates(form).filter(function (d) {
+      if (changed && d < today) return false;
       return !state.events.some(function (x) { return x.date === d && x.status !== 'cancelled' && x.title === person && (!x.enrollmentId || x.enrollmentId === enr.id); });
     }) : [];
     putEnr(enr);
-    if (gen) {
-      dates.forEach(function (d) {
-        state.events.push({ id: newId(), title: person, date: d, start: form.start, end: form.end, memo: '', status: 'scheduled', enrollmentId: enr.id });
-      });
-      saveEvents();
-    }
+    dates.forEach(function (d) {
+      state.events.push({ id: newId(), title: person, date: d, start: form.start, end: form.end, memo: '', status: 'scheduled', enrollmentId: enr.id });
+    });
+    if (gen || changed) saveEvents();
     var d0 = parse(enr.month + '-01');
     state.month = new Date(d0.getFullYear(), d0.getMonth(), 1);
     closeEnr(); render();
-    toast(gen ? '저장했어요. 달력에 수업 ' + dates.length + '회를 넣었어요' : '저장했어요');
+    toast(changed ? '저장했어요. 서명 안 된 수업 ' + dates.length + '회를 새 일정으로 바꿨어요' : gen ? '저장했어요. 달력에 수업 ' + dates.length + '회를 넣었어요' : '저장했어요');
   }
-  function removeEnr() {
-    var b = $('#btn-edel');
-    if (!b.classList.contains('armed')) {
-      b.classList.add('armed'); b.textContent = '정말 삭제';
-      clearTimeout(eState.armTimer);
-      eState.armTimer = setTimeout(function () { b.classList.remove('armed'); b.textContent = '삭제'; }, 4000);
-      return;
-    }
+  async function removeEnr() {
+    if (!await ask('신청서 삭제', $('#g-name').value.trim() + ' 신청서를 삭제할까요? 서명 전 연결 수업도 달력에서 함께 지워져요.', '삭제')) return;
     var id = eState.editing;
     state.enrollments = state.enrollments.filter(function (e) { return e.id !== id; });
     state.events = state.events.filter(function (e) { return !(e.enrollmentId === id && e.status === 'scheduled'); });
@@ -1142,7 +1160,7 @@ body { margin: 0; }
     var src = prevList.filter(function (e) { return have.indexOf(e.name + '|' + e.dong + '|' + e.ho) < 0; });
     if (!src.length) { toast(prevList.length ? '지난달 신청서는 이미 모두 복사돼 있어요' : '지난달 신청서가 없어요'); return; }
     src.forEach(function (e) {
-      state.enrollments.push(Object.assign({}, e, { id: newId(), month: key, periodStart: b[0], periodEnd: b[1], appliedOn: ymd(new Date()) }));
+      state.enrollments.push(Object.assign({}, e, { id: newId(), month: key, periodStart: b[0], periodEnd: b[1] }));
     });
     saveEnr(); render();
     toast(src.length + '건을 복사했어요. 요일과 횟수를 확인해 주세요');
@@ -1299,7 +1317,7 @@ body { margin: 0; }
     updateEnrHints();
   });
   document.addEventListener('keydown', function (e) {
-    if (e.key !== 'Escape') return;
+    if (e.key !== 'Escape' || !$('#confm').hidden) return;
     if (!$('#preview').hidden) closePreview();
     else if (!$('#esheet').hidden) closeEnr();
   });
