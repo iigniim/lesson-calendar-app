@@ -251,22 +251,26 @@ body { margin: 0; }
   font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', 'IBM Plex Sans KR', sans-serif; font-size: 13.5px; line-height: 1.5;
   -webkit-print-color-adjust: exact; print-color-adjust: exact;
 }
-.paper.land { width: 297mm; height: 209mm; padding: 9mm; display: flex; gap: 8mm; }
+/* left form (신청서): one uniform 10mm line pitch, like the paper original */
+.paper .lf { padding: 2mm 2mm 3mm; font-size: 16px; }
+.paper .lf .pt { font-size: 40px; letter-spacing: 0.5em; text-indent: 0.5em; line-height: 14mm; margin: 0 0 1mm; }
+.paper .lf p { margin: 0; line-height: 9.7mm; white-space: nowrap; }
+.paper .lf .i1 { padding-left: 1.6em; }
+.paper .lf .i2 { padding-left: 3.2em; }
+.paper .lf .small { font-size: 13.5px; }
+.paper .lf .sg { padding-left: 27mm; }
+.paper .lf .ph { padding-left: 20mm; }
+.paper .lf .dt { padding-left: 25mm; }
+.paper .lf .brand { margin-top: auto; padding-left: 25mm; font-size: 15px; line-height: 8mm; }
+.paper.land { width: 297mm; height: 209mm; padding: 6mm; display: flex; gap: 8mm; }
 .paper.port { width: 210mm; height: 296mm; padding: 13mm 11mm; display: flex; flex-direction: column; }
 .paper .pf { flex: 1; min-width: 0; border: 0.7mm solid #000; padding: 5mm 7mm 4mm; display: flex; flex-direction: column; }
 .paper .pf.ghost { border: 0; visibility: hidden; }
 .paper .pt { margin: 0 0 2mm; text-align: center; font-size: 30px; font-weight: 500; letter-spacing: 0.35em; line-height: 1.2; }
-.paper .pl { margin: 0; line-height: 1.95; }
-.paper .terms { margin: 1mm 0 0; padding-left: 1.5em; }
-.paper .terms li { line-height: 1.85; padding-left: 0.2em; }
-.paper .sub { display: block; font-size: 12.5px; line-height: 1.7; }
-.paper .sub.blue { margin-left: -1.7em; }
 .paper .fill { display: inline-block; min-width: 2em; padding: 0 0.3em; border-bottom: 1px solid #000; text-align: center; line-height: 1.3; }
 .paper .fill.w { min-width: 6.5em; }
 .paper .fill.w2 { min-width: 8em; }
 .paper .ring { display: inline-block; border: 1.5px solid #000; border-radius: 50%; padding: 0 0.28em; line-height: 1.25; }
-.paper .sign { margin-top: 3mm; }
-.paper .foot-brand { margin-top: auto; font-size: 13px; padding-left: 3em; }
 .paper table { border-collapse: collapse; width: 100%; }
 .paper th, .paper td { border: 0.5mm solid #000; text-align: center; padding: 0 2mm; font-weight: 500; }
 .paper .info th { width: 17%; height: 10mm; }
@@ -275,6 +279,9 @@ body { margin: 0; }
 .paper .rows th { height: 10mm; }
 .paper .rows td { height: 10.4mm; }
 .paper .rows .n { width: 12%; }
+.paper .rows td { padding: 0.5mm 2mm; }
+.paper .sig { display: block; margin: 0 auto; height: 8.6mm; width: auto; max-width: 100%; fill: none; stroke: #000; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.signpad { width: 100%; aspect-ratio: 3 / 1; border: 1px dashed var(--ink-2); border-radius: 12px; background: var(--surface); color: var(--ink); touch-action: none; display: block; }
 .paper .stitle { margin: 4mm 0 6mm; text-align: center; font-size: 25px; font-weight: 500; }
 .paper .stitle u { display: inline-block; min-width: 3em; text-decoration: none; }
 .paper .srow { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 1.5mm; font-size: 14px; }
@@ -358,7 +365,7 @@ body { margin: 0; }
       <legend>상태</legend>
       <div class="segs">
         <label class="seg"><input type="radio" name="status" value="scheduled" checked><span>예정</span></label>
-        <label class="seg"><input type="radio" name="status" value="done"><span>완료</span></label>
+        <label class="seg" id="seg-done" hidden><input type="radio" name="status" value="done"><span>완료</span></label>
         <label class="seg"><input type="radio" name="status" value="cancelled"><span>취소</span></label>
       </div>
     </fieldset>
@@ -371,6 +378,20 @@ body { margin: 0; }
       <button type="submit" class="btn primary" id="btn-save">저장</button>
     </div>
   </form>
+</div>
+
+<div class="scrim" id="signm" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="sign-title">
+    <div class="grab"></div>
+    <h2 id="sign-title">회원 사인</h2>
+    <p class="help" id="sign-who"></p>
+    <canvas class="signpad" id="signpad"></canvas>
+    <div class="actions">
+      <button type="button" class="btn" id="sign-cancel">닫기</button>
+      <button type="button" class="btn" id="sign-clear">지우기</button>
+      <button type="button" class="btn primary" id="sign-ok">사인 완료</button>
+    </div>
+  </div>
 </div>
 
 <div class="scrim" id="backup" hidden>
@@ -691,7 +712,7 @@ body { margin: 0; }
           '<span class="time">' + esc(e.start) + '<small>' + esc(e.end) + '</small></span>' +
           '<span class="who"><b>' + esc(e.title) + '</b>' + (e.memo ? '<em>' + esc(e.memo) + '</em>' : '') + pill + '</span>' +
         '</button>' +
-        '<button type="button" class="check" data-toggle="' + esc(e.id) + '" aria-pressed="' + (st === 'done') + '" aria-label="' + esc(e.title) + ' 수업 완료 표시"><span>' + CHECK + '</span></button>' +
+        '<button type="button" class="check" data-toggle="' + esc(e.id) + '" aria-pressed="' + (st === 'done') + '" aria-label="' + esc(e.title) + ' 수업 사인"><span>' + CHECK + '</span></button>' +
       '</li>';
     }).join('');
   }
@@ -736,6 +757,7 @@ body { margin: 0; }
     $('#repeat-box').hidden = !!ev;
     $('#status-box').hidden = !ev;
     setStatusRadio(ev ? (ev.status || 'scheduled') : 'scheduled');
+    $('#seg-done').hidden = !(ev && ev.status === 'done'); // done only comes from a member signature
     $('#btn-del').hidden = !ev;
     $('#btn-del').textContent = '삭제';
     $('#btn-del').classList.remove('armed');
@@ -773,6 +795,7 @@ body { margin: 0; }
         var old = state.events.find(function (x) { return x.id === state.editing; }) || {};
         var upd = { id: state.editing, title: title, date: date, start: start, end: end, memo: memo, status: st };
         if (old.enrollmentId) upd.enrollmentId = old.enrollmentId;
+        if (old.sign && st === 'done') upd.sign = old.sign;
         await put(upd);
         toast('수정했어요');
       } else {
@@ -826,9 +849,11 @@ body { margin: 0; }
       var id = t.getAttribute('data-toggle');
       var ev = state.events.find(function (x) { return x.id === id; });
       if (!ev) return;
-      var next = ev.status === 'done' ? 'scheduled' : 'done';
-      try { await put(Object.assign({}, ev, { status: next })); }
-      catch (err) { toast('변경하지 못했어요'); }
+      if (ev.status === 'done') {
+        if (!confirm('사인을 지우고 예정으로 되돌릴까요?')) return;
+        var back = Object.assign({}, ev, { status: 'scheduled' }); delete back.sign;
+        await put(back);
+      } else openSign(ev);
       return;
     }
     var m = e.target.closest('[data-edit]');
@@ -1098,25 +1123,26 @@ body { margin: 0; }
     var ap = enr.appliedOn ? parse(enr.appliedOn) : new Date();
     var part = function (s, i) { return s ? s.split(':')[i] : ''; };
     var dayList = ENR_DAYS.map(function (d) { return enr.days.indexOf(d[0]) >= 0 ? '<span class="ring">' + d[1] + '</span>' : d[1]; }).join(', ');
-    return '<div class="pf">' +
+    return '<div class="pf lf">' +
       '<h3 class="pt">신 청 서</h3>' +
-      '<p class="pl">' + fill(Number(enr.month.slice(5))) + '월 헬스 <u>소그룹, <span class="ring">개인</span> 강습</u></p>' +
-      '<p class="pl">▶▷ 강습에 대하여 다음 사항을 참조해 주시기 바랍니다.</p>' +
-      '<ol class="terms">' +
-      '<li>한 달 강습 등록 기간은 ' + fill(ps ? ps.getMonth() + 1 : '') + ' / ' + fill(ps ? ps.getDate() : '') + ' 부터 ' + fill(pe ? pe.getMonth() + 1 : '') + ' / ' + fill(pe ? pe.getDate() : '') + ' 까지 입니다.</li>' +
-      '<li>강습 요일은 ( ' + dayList + ' ) 이며, 총, ' + fill(enr.count) + ' 회 입니다.</li>' +
-      '<li>강습 시간은 ' + fill(part(enr.start, 0)) + ' : ' + fill(part(enr.start, 1)) + ' ~ ' + fill(part(enr.end, 0)) + ' : ' + fill(part(enr.end, 1)) + ' 입니다.</li>' +
-      '<li>강습료는 월 ' + fill(fmt(enr.fee), 'w') + '원 이며, 매달 관리비에 자동 부과 됩니다. (강습료는 후부과 처리 됩니다.)' +
-        '<span class="sub">※ 강사와 직접 현금거래로 인한 불이익은 당 스포츠센터는 책임지지 않습니다.</span></li>' +
-      '<li>강습시간을 준수하여 주시기 바랍니다.</li>' +
-      '<li>강습 당일 취소는 불가능 하며, 당일 취소 시 해당일 수업료는 100% 부과 됩니다</li>' +
-      '<li>회원님의 개인 사유로 인한 결석은 보충 하실 수 없습니다.' +
-        '<span class="sub blue">[단, 질병 등 부득이한 사정으로 취소 희망 시 소명자료를 제출 하여야 합니다.]</span></li>' +
-      '</ol>' +
-      '<p class="pl sign">' + fill(enr.dong) + ' 동 ' + fill(enr.ho, 'w') + ' 호 성명 ' + fill(enr.name, 'w2') + ' (인)</p>' +
-      '<p class="pl">연 락 처 : ' + esc(enr.phone) + '</p>' +
-      '<p class="pl">' + fill(ap.getFullYear()) + ' 년 ' + fill(ap.getMonth() + 1) + ' 월 ' + fill(ap.getDate()) + ' 일 &nbsp; 담당자 : ' + esc(state.settings.instructor) + ' (인)</p>' +
-      '<p class="foot-brand">Acrovista Sports Community</p>' +
+      '<p style="padding-left:20mm">' + fill(Number(enr.month.slice(5))) + '월 헬스 <u>소그룹, <span class="ring">개인</span> 강습</u></p>' +
+      '<p>▶▷ 강습에 대하여 다음 사항을 참조해 주시기 바랍니다.</p>' +
+      '<p>1. 한 달 강습 등록 기간은 ' + fill(ps ? ps.getMonth() + 1 : '') + ' / ' + fill(ps ? ps.getDate() : '') + ' 부터 ' + fill(pe ? pe.getMonth() + 1 : '') + ' / ' + fill(pe ? pe.getDate() : '') + ' 까지 입니다.</p>' +
+      '<p>2. 강습 요일은 ( ' + dayList + ' ) 이며, 총, ' + fill(enr.count) + ' 회 입니다.</p>' +
+      '<p>3. 강습 시간은 ' + fill(part(enr.start, 0)) + ' : ' + fill(part(enr.start, 1)) + ' ~ ' + fill(part(enr.end, 0)) + ' : ' + fill(part(enr.end, 1)) + ' 입니다.</p>' +
+      '<p>4. 강습료는 월 ' + fill(fmt(enr.fee), 'w') + '원 이며, 매달 관리비에</p>' +
+      '<p class="i1">자동 부과 됩니다. (강습료는 후부과 처리 됩니다.)</p>' +
+      '<p class="i1">※ 강사와 직접 현금거래로 인한 불이익은 당 스포츠센터는</p>' +
+      '<p class="i2">책임지지 않습니다.</p>' +
+      '<p>5. 강습시간을 준수하여 주시기 바랍니다.</p>' +
+      '<p>6. 강습 당일 취소는 불가능 하며, 당일 취소 시 해당일 수업료는</p>' +
+      '<p class="i1">100% 부과 됩니다</p>' +
+      '<p>7. 회원님의 개인 사유로 인한 결석은 보충 하실 수 없습니다.</p>' +
+      '<p class="small">[단, 질병 등 부득이한 사정으로 취소 희망 시 소명자료를 제출 하여야 합니다.]</p>' +
+      '<p class="sg">' + fill(enr.dong) + ' 동 ' + fill(enr.ho, 'w') + ' 호 성명 ' + fill(enr.name, 'w2') + ' (인)</p>' +
+      '<p class="ph">연 락 처 : ' + esc(enr.phone) + '</p>' +
+      '<p class="dt">' + fill(ap.getFullYear()) + ' 년 ' + fill(ap.getMonth() + 1) + ' 월 ' + fill(ap.getDate()) + ' 일 &nbsp; 담당자 : ' + esc(state.settings.instructor) + ' (인)</p>' +
+      '<p class="brand">Acrovista Sports Community</p>' +
       '</div>';
   }
   function signRight(enr, rows, from) {
@@ -1124,7 +1150,7 @@ body { margin: 0; }
     var body = '';
     for (var i = 0; i < 11; i++) {
       var l = rows[i];
-      body += '<tr><td class="n">' + (from + i + 1) + '</td><td>' + (l ? esc(longDate(l.date)) : '') + '</td><td>' + (l ? esc(l.start + ' ~ ' + l.end) : '') + '</td><td></td></tr>';
+      body += '<tr><td class="n">' + (from + i + 1) + '</td><td>' + (l ? esc(longDate(l.date)) : '') + '</td><td>' + (l ? esc(l.start + ' ~ ' + l.end) : '') + '</td><td>' + (l && validSign(l.sign) ? '<svg class="sig" viewBox="0 0 ' + SW + ' ' + SH + '"><path d="' + l.sign + '"/></svg>' : '') + '</td></tr>';
     }
     return '<div class="pf">' +
       '<h3 class="pt" style="letter-spacing:0.05em">선생님 보관용</h3>' +
@@ -1249,6 +1275,35 @@ body { margin: 0; }
     else if (!$('#esheet').hidden) closeEnr();
   });
 
+  /* ---------- member signature: strokes stored as a compact SVG path (SW x SH box), ~1 KB each ---------- */
+  var SW = 300, SH = 100, signEv = null, strokes = [], cv = null;
+  function validSign(v) { return typeof v === 'string' && v.length < 20000 && /^[ML0-9. -]+$/.test(v); }
+  function padXY(e) { var r = cv.getBoundingClientRect(); return [Math.round((e.clientX - r.left) / r.width * SW), Math.round((e.clientY - r.top) / r.height * SH)]; }
+  function padDraw() {
+    var c = cv.getContext('2d'), k = cv.width / SW;
+    c.clearRect(0, 0, cv.width, cv.height);
+    c.strokeStyle = getComputedStyle(cv).color; c.lineWidth = 2.4 * k; c.lineCap = c.lineJoin = 'round';
+    strokes.forEach(function (s) { c.beginPath(); s.forEach(function (p, i) { if (i) c.lineTo(p[0] * k, p[1] * k); else c.moveTo(p[0] * k, p[1] * k); }); if (s.length === 1) c.lineTo(s[0][0] * k + 0.1, s[0][1] * k); c.stroke(); });
+  }
+  function openSign(ev) {
+    signEv = ev; strokes = [];
+    $('#sign-who').textContent = ev.title + ' 회원님, 아래 칸에 사인해 주세요.';
+    $('#signm').hidden = false; document.body.classList.add('locked');
+    cv.width = cv.clientWidth * 2; cv.height = cv.width * SH / SW; padDraw();
+  }
+  function closeSign() { $('#signm').hidden = true; document.body.classList.remove('locked'); signEv = null; }
+  cv = $('#signpad');
+  cv.addEventListener('pointerdown', function (e) { cv.setPointerCapture(e.pointerId); strokes.push([padXY(e)]); padDraw(); });
+  cv.addEventListener('pointermove', function (e) { if (!strokes.length || !cv.hasPointerCapture(e.pointerId)) return; var s = strokes[strokes.length - 1], p = padXY(e), q = s[s.length - 1]; if (p[0] !== q[0] || p[1] !== q[1]) { s.push(p); padDraw(); } });
+  $('#sign-clear').addEventListener('click', function () { strokes = []; padDraw(); });
+  $('#sign-cancel').addEventListener('click', closeSign);
+  $('#sign-ok').addEventListener('click', async function () {
+    if (!strokes.length) { toast('먼저 사인해 주세요'); return; }
+    var d = strokes.map(function (s) { return 'M' + s[0].join(' ') + s.slice(1).map(function (p) { return 'L' + p.join(' '); }).join('') + (s.length === 1 ? 'L' + (s[0][0] + 1) + ' ' + s[0][1] : ''); }).join('');
+    var ev = signEv; closeSign();
+    await put(Object.assign({}, ev, { status: 'done', sign: d }));
+  });
+
   /* ---------- backup / restore ---------- */
   function backupMsg(m, ok) { var e = $('#backup-msg'); e.textContent = m; e.hidden = !m; e.style.color = ok ? 'var(--ok)' : 'var(--danger)'; }
   function openBackup() {
@@ -1285,6 +1340,7 @@ body { margin: 0; }
       good.forEach(function (e) {
         var o = { id: e.id, title: e.title, date: e.date, start: e.start, end: e.end, memo: e.memo || '', status: e.status || 'scheduled' };
         if (e.enrollmentId) o.enrollmentId = e.enrollmentId;
+        if (validSign(e.sign)) o.sign = e.sign;
         byId[e.id] = o;
       });
       state.events = Object.keys(byId).map(function (k) { return byId[k]; });

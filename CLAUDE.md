@@ -35,7 +35,7 @@ The owner is learning to code (HTML/CSS basics, moving toward backend/AI enginee
 ## The paper forms
 
 The two forms come from the owner's workplace (Acrovista Sports Community): 신청서 + 선생님 보관용 on one landscape A4, and the monthly 종목별 입주민 강습신청 현황 on portrait A4. The original scans are photos, so the layouts are redrawn in HTML/CSS. If the owner changes a form, edit `signLeft`, `signRight`, `summaryPages` and the `.paper` CSS, then check the result as a PDF (Playwright `page.pdf` with `prefer_css_page_size`) to confirm the page count.
-The 회원 column of the 선생님 보관용 table is intentionally blank: the member signs it by hand after the lesson.
+The 회원 column of the 선생님 보관용 table shows the member's signature. Marking a lesson done is done by the member signing on the phone (event field `sign`, an SVG path string in a 300x100 box, optional); there is no plain done button. The left form (`signLeft`) follows the owner's original `신청서.pdf`: uniform ~10mm line pitch, continuation lines indented.
 
 ## Service worker
 
