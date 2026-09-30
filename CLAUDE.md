@@ -13,7 +13,7 @@ The owner is learning to code (HTML/CSS basics, moving toward backend/AI enginee
 
 ## Screens
 
-- **달력 tab**: month grid + the selected day's lessons. Add/edit a lesson in a bottom sheet. Changing a lesson's date or time here is how sign-sheet dates get adjusted.
+- **달력 tab**: month grid + the selected day's lessons. Adding a lesson opens the same form as 신청서 등록 (weekday of the selected day pre-checked), so the member gets a 신청서 and its lessons in one step; editing a single lesson uses the lesson bottom sheet. Changing a lesson's date or time here is how sign-sheet dates get adjusted.
 - **신청·출력 tab**: the month's enrollment forms (신청서), sorted by 동 then 호수. Add/edit an enrollment, copy last month's, preview and print.
 - **Print preview** (`#preview`): renders A4 pages as HTML (`.paper.land` for 신청서+사인지, `.paper.port` for 강습신청 현황) and calls `window.print()`. Paper is always black on white, in both themes.
 

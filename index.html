@@ -872,7 +872,7 @@ body { margin: 0; }
       if (ev2) openSheet(ev2);
     }
   });
-  $('#add').addEventListener('click', function () { if (state.tab === 'enr') openEnr(null); else openSheet(null); });
+  $('#add').addEventListener('click', function () { openEnr(null, state.tab === 'enr' ? null : state.selected); });
   $('#btn-close').addEventListener('click', closeSheet);
   $('#sheet').addEventListener('click', function (e) { if (e.target === $('#sheet')) closeSheet(); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$('#sheet').hidden) closeSheet(); });
@@ -1012,11 +1012,12 @@ body { margin: 0; }
     else if (!ds.length) note.textContent = '등록 기간 안에 고른 요일이 없어요.';
     else note.textContent = ds.length + '회: ' + ds.map(mdLabel).join(', ');
   }
-  function openEnr(enr) {
+  // date (optional): opened from the calendar, so start with that day's month and weekday
+  function openEnr(enr, date) {
     eState.editing = enr ? enr.id : null;
     eState.periodDirty = !!enr;
-    var key = monthKey(state.month), b = monthBounds(enr ? enr.month : key);
-    $('#e-title').textContent = enr ? '신청서 수정' : '신청서 등록';
+    var key = date ? date.slice(0, 7) : monthKey(state.month), b = monthBounds(enr ? enr.month : key);
+    $('#e-title').textContent = enr ? '신청서 수정' : date ? '수업 등록' : '신청서 등록';
     $('#g-name').value = enr ? enr.name : '';
     $('#g-dong').value = enr ? enr.dong : '';
     $('#g-ho').value = enr ? enr.ho : '';
@@ -1025,7 +1026,7 @@ body { margin: 0; }
     $('#g-applied').value = enr ? (enr.appliedOn || ymd(new Date())) : ymd(new Date());
     $('#g-ps').value = enr ? enr.periodStart : b[0];
     $('#g-pe').value = enr ? enr.periodEnd : b[1];
-    setDays(enr ? enr.days : []);
+    setDays(enr ? enr.days : date ? [parse(date).getDay()] : []);
     $('#g-start').value = enr ? enr.start : '10:00';
     $('#g-end').value = enr ? enr.end : '10:50';
     syncDur();
@@ -1076,8 +1077,12 @@ body { margin: 0; }
     if (!enr.start || !enr.end || toMin(enr.end) <= toMin(enr.start)) return eErr('종료 시간이 시작 시간보다 늦어야 해요.');
     var gen = !$('#g-gen-box').hidden && $('#g-gen').checked;
     if (gen && !enr.days.length) return eErr('달력에 일정을 만들려면 강습 요일을 골라 주세요.');
-    enr.id = eState.editing || newId();
-    var dates = gen ? genDates(enr) : [];
+    // same member (name + 동 + 호) and month already has a 신청서: update it instead of making a second one
+    var same = eState.editing ? null : state.enrollments.find(function (e) { return e.name === enr.name && e.dong === enr.dong && e.ho === enr.ho && e.month === enr.month; });
+    enr.id = eState.editing || (same ? same.id : newId());
+    var dates = gen ? genDates(enr).filter(function (d) {
+      return !state.events.some(function (x) { return x.date === d && x.status !== 'cancelled' && (x.enrollmentId ? x.enrollmentId === enr.id : x.title === enr.name); });
+    }) : [];
     putEnr(enr);
     if (gen) {
       dates.forEach(function (d) {
