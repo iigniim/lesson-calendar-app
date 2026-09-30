@@ -386,6 +386,19 @@ body { margin: 0; }
   </form>
 </div>
 
+<div class="scrim" id="delm" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="delm-title">
+    <div class="grab"></div>
+    <h2 id="delm-title">수업 삭제</h2>
+    <p id="delm-text"></p>
+    <div class="actions" style="flex-direction:column">
+      <button type="button" class="btn danger" id="delm-one">이 수업만 삭제</button>
+      <button type="button" class="btn danger" id="delm-after">이 수업과 이후 수업 모두 삭제</button>
+      <button type="button" class="btn" id="delm-cancel">취소</button>
+    </div>
+  </div>
+</div>
+
 <div class="scrim" id="signm" hidden>
   <div class="panel" role="dialog" aria-modal="true" aria-labelledby="sign-title">
     <div class="grab"></div>
@@ -563,10 +576,6 @@ body { margin: 0; }
     if (i >= 0) state.events[i] = ev; else state.events.push(ev);
     lsSave(); render();
   }
-  async function del(id) {
-    state.events = state.events.filter(function (e) { return e.id !== id; });
-    lsSave(); render();
-  }
   function initStore() {
     state.mode = 'local';
     state.events = lsLoad();
@@ -735,7 +744,7 @@ body { margin: 0; }
   }
 
   /* ---------- sheet ---------- */
-  var dur = 50, delTimer = null;
+  var dur = 50;
   function setStatusRadio(v) {
     var r = document.querySelector('input[name=status][value=' + v + ']');
     if (r) r.checked = true;
@@ -767,8 +776,6 @@ body { margin: 0; }
     setStatusRadio(ev ? (ev.status || 'scheduled') : 'scheduled');
     $('#seg-done').hidden = !(ev && ev.status === 'done'); // done only comes from a member signature
     $('#btn-del').hidden = !ev;
-    $('#btn-del').textContent = '삭제';
-    $('#btn-del').classList.remove('armed');
     $('#f-msg').hidden = true;
     $('#btn-save').disabled = false;
     dur = toMin($('#f-end').value) - toMin($('#f-start').value) === 30 ? 30 : 50; // lessons are 30 or 50 min
@@ -784,7 +791,6 @@ body { margin: 0; }
   function closeSheet() {
     $('#sheet').hidden = true;
     document.body.classList.remove('locked');
-    clearTimeout(delTimer);
   }
   function showErr(m) { var e = $('#f-msg'); e.textContent = m; e.hidden = false; }
 
@@ -826,17 +832,34 @@ body { margin: 0; }
     }
   }
 
-  async function removeCurrent() {
-    var b = $('#btn-del');
-    if (!b.classList.contains('armed')) {
-      b.classList.add('armed'); b.textContent = '정말 삭제';
-      clearTimeout(delTimer);
-      delTimer = setTimeout(function () { b.classList.remove('armed'); b.textContent = '삭제'; }, 4000);
-      return;
-    }
-    try { await del(state.editing); closeSheet(); toast('삭제했어요'); }
-    catch (err) { showErr('삭제하지 못했어요. 잠시 후 다시 시도해 주세요.'); }
+  // Same member's lessons on or after this one (same enrollment, or same name when there is none)
+  function lessonsFrom(ev) {
+    return state.events.filter(function (x) {
+      return x.date >= ev.date && (ev.enrollmentId ? x.enrollmentId === ev.enrollmentId : !x.enrollmentId && x.title === ev.title);
+    });
   }
+  function removeCurrent() {
+    var ev = state.events.find(function (x) { return x.id === state.editing; });
+    if (!ev) return;
+    var n = lessonsFrom(ev).length;
+    $('#delm-text').textContent = longDate(ev.date) + ' ' + ev.title + ' 수업을 삭제할까요?';
+    $('#delm-after').hidden = n < 2;
+    $('#delm-after').textContent = '이 수업과 이후 수업 모두 삭제 (' + n + '개)';
+    $('#delm').hidden = false;
+  }
+  async function deleteLessons(ids) {
+    $('#delm').hidden = true;
+    try {
+      state.events = state.events.filter(function (e) { return ids.indexOf(e.id) < 0; });
+      lsSave(); render(); closeSheet(); toast(ids.length + '개 삭제했어요');
+    } catch (err) { showErr('삭제하지 못했어요. 잠시 후 다시 시도해 주세요.'); }
+  }
+  $('#delm-one').addEventListener('click', function () { deleteLessons([state.editing]); });
+  $('#delm-after').addEventListener('click', function () {
+    var ev = state.events.find(function (x) { return x.id === state.editing; });
+    if (ev) deleteLessons(lessonsFrom(ev).map(function (x) { return x.id; }));
+  });
+  $('#delm-cancel').addEventListener('click', function () { $('#delm').hidden = true; });
 
   /* ---------- events ---------- */
   function shiftMonth(n) { state.month = new Date(state.month.getFullYear(), state.month.getMonth() + n, 1); render(); }
@@ -875,7 +898,7 @@ body { margin: 0; }
   $('#add').addEventListener('click', function () { openEnr(null, state.tab === 'enr' ? null : state.selected); });
   $('#btn-close').addEventListener('click', closeSheet);
   $('#sheet').addEventListener('click', function (e) { if (e.target === $('#sheet')) closeSheet(); });
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$('#sheet').hidden) closeSheet(); });
+  document.addEventListener('keydown', function (e) { if (e.key !== 'Escape') return; if (!$('#delm').hidden) $('#delm').hidden = true; else if (!$('#sheet').hidden) closeSheet(); });
   $('#form').addEventListener('submit', saveForm);
   $('#btn-del').addEventListener('click', removeCurrent);
   $('#f-repeat').addEventListener('change', function () { $('#count-box').hidden = $('#f-repeat').value === '0'; });
