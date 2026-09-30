@@ -593,7 +593,9 @@ body { margin: 0; }
     if (data.settings) { state.settings.instructor = data.settings.instructor || state.settings.instructor; state.settings.label = data.settings.label || state.settings.label; }
     lsSave(); saveEnr(); saveSettings(); render();
   }
-  // Pull once: newer cloud copy replaces this device; otherwise this device is pushed up.
+  function byId(list) { var m = {}; list.forEach(function (x) { m[x.id] = x; }); return m; }
+  function union(a, b) { var m = byId(a), n = byId(b); Object.keys(n).forEach(function (k) { m[k] = n[k]; }); return Object.keys(m).map(function (k) { return m[k]; }); }
+  // Pull once: newer cloud copy replaces this device; first login on a device that already has data merges by id; otherwise push.
   async function cloudStart(firstLogin) {
     if (!sess) return;
     try {
@@ -601,9 +603,14 @@ body { margin: 0; }
       var rows = await sb('/rest/v1/lesson_calendar_backup?select=data,updated_at', {}, t);
       var mine = state.events.length || state.enrollments.length;
       var cloudNewer = rows.length && (localStorage.getItem(LS_SYNC) || '') < rows[0].updated_at;
-      if (rows.length && cloudNewer && !(firstLogin && mine)) adopt(rows[0].data);
-      else await push();
-      localStorage.setItem(LS_SYNC, rows.length && cloudNewer && !(firstLogin && mine) ? rows[0].updated_at : localStorage.getItem(LS_SYNC) || '');
+      if (rows.length && firstLogin && mine) {
+        var d = rows[0].data;
+        adopt({ events: union(state.events, (d.events || []).filter(validEvent)), enrollments: union(state.enrollments, (d.enrollments || []).filter(validEnr).map(cleanEnr)), settings: d.settings });
+        await push();
+      } else if (cloudNewer) {
+        adopt(rows[0].data);
+        localStorage.setItem(LS_SYNC, rows[0].updated_at);
+      } else await push();
       $('#sync').textContent = '클라우드에 저장됨';
     } catch (e) { $('#sync').textContent = '이 기기에 저장됨 (오프라인)'; }
   }
