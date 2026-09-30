@@ -1077,16 +1077,20 @@ body { margin: 0; }
     if (!enr.start || !enr.end || toMin(enr.end) <= toMin(enr.start)) return eErr('종료 시간이 시작 시간보다 늦어야 해요.');
     var gen = !$('#g-gen-box').hidden && $('#g-gen').checked;
     if (gen && !enr.days.length) return eErr('달력에 일정을 만들려면 강습 요일을 골라 주세요.');
-    // same member (name + 동 + 호) and month already has a 신청서: update it instead of making a second one
-    var same = eState.editing ? null : state.enrollments.find(function (e) { return e.name === enr.name && e.dong === enr.dong && e.ho === enr.ho && e.month === enr.month; });
+    // same 동 + 호 and month already has a 신청서 (a family): share it (the first name stays), one lesson set per person
+    var person = enr.name, form = enr;
+    var same = eState.editing ? null : state.enrollments.find(function (e) { return e.dong === enr.dong && e.ho === enr.ho && e.month === enr.month; });
+    if (same) {
+      enr = Object.assign({}, same, { days: same.days.concat(form.days.filter(function (d) { return same.days.indexOf(d) < 0; })) });
+    }
     enr.id = eState.editing || (same ? same.id : newId());
-    var dates = gen ? genDates(enr).filter(function (d) {
-      return !state.events.some(function (x) { return x.date === d && x.status !== 'cancelled' && (x.enrollmentId ? x.enrollmentId === enr.id : x.title === enr.name); });
+    var dates = gen ? genDates(form).filter(function (d) {
+      return !state.events.some(function (x) { return x.date === d && x.status !== 'cancelled' && x.title === person && (!x.enrollmentId || x.enrollmentId === enr.id); });
     }) : [];
     putEnr(enr);
     if (gen) {
       dates.forEach(function (d) {
-        state.events.push({ id: newId(), title: enr.name, date: d, start: enr.start, end: enr.end, memo: '', status: 'scheduled', enrollmentId: enr.id });
+        state.events.push({ id: newId(), title: person, date: d, start: form.start, end: form.end, memo: '', status: 'scheduled', enrollmentId: enr.id });
       });
       saveEvents();
     }
