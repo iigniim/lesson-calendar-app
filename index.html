@@ -427,12 +427,11 @@ body { margin: 0; }
     </div>
     <p class="err" id="backup-msg" role="status" hidden></p>
     <div id="cloud-out">
-      <p class="help">로그인하면 일정이 클라우드에도 저장돼서 폰을 바꿔도 이어서 쓸 수 있어요.</p>
+      <p class="help">로그인하면 일정이 클라우드에도 저장돼서 폰을 바꿔도 이어서 쓸 수 있어요. 처음이면 자동으로 가입돼요.</p>
       <label class="fld"><span>이메일</span><input type="email" id="c-email" autocomplete="email"></label>
       <label class="fld"><span>비밀번호 (6자 이상)</span><input type="password" id="c-pass" autocomplete="current-password"></label>
       <div class="stack">
-        <button type="button" class="btn primary" id="btn-login" style="flex:none">로그인</button>
-        <button type="button" class="btn" id="btn-signup" style="flex:none">회원가입</button>
+        <button type="button" class="btn primary" id="btn-login" style="flex:none">로그인 / 가입</button>
       </div>
     </div>
     <div id="cloud-in" hidden>
@@ -664,11 +663,19 @@ body { margin: 0; }
     $('#cloud-out').hidden = !!sess; $('#cloud-in').hidden = !sess;
     if (sess) $('#cloud-who').textContent = sess.email + ' 로그인 중 · 변경할 때마다 자동으로 클라우드에 저장돼요.';
   }
-  async function auth(signup) {
+  // One button: log in; if the account does not exist yet, sign up with the same email + password
+  async function auth() {
     var body = JSON.stringify({ email: $('#c-email').value.trim(), password: $('#c-pass').value });
+    var post = function (path) { return sb(path, { method: 'POST', body: body }); };
     try {
-      var j = await sb(signup ? '/auth/v1/signup' : '/auth/v1/token?grant_type=password', { method: 'POST', body: body });
-      if (!j.access_token) { backupMsg('가입 확인 메일을 보냈어요. 메일의 링크를 누른 뒤 로그인해 주세요.', true); return; }
+      var j;
+      try { j = await post('/auth/v1/token?grant_type=password'); }
+      catch (e) {
+        if (!/invalid login/i.test(e.message)) throw e;
+        try { j = await post('/auth/v1/signup'); }
+        catch (e2) { throw new Error(/registered/i.test(e2.message) ? '비밀번호가 맞지 않아요' : e2.message); }
+        if (!j.access_token) { backupMsg('이메일이나 비밀번호를 확인해 주세요. (새 가입이면 확인 메일을 보냈어요)', true); return; }
+      }
       setSess(j); $('#c-pass').value = ''; backupMsg('', true);
       await cloudStart(true);
       $('#backup-count').textContent = '저장된 수업 ' + state.events.length + '개 · 신청서 ' + state.enrollments.length + '건';
@@ -1413,8 +1420,7 @@ body { margin: 0; }
   $('#open-backup').addEventListener('click', openBackup);
   $('#btn-backup-close').addEventListener('click', closeBackup);
   $('#backup').addEventListener('click', function (e) { if (e.target === $('#backup')) closeBackup(); });
-  $('#btn-login').addEventListener('click', function () { auth(false); });
-  $('#btn-signup').addEventListener('click', function () { auth(true); });
+  $('#btn-login').addEventListener('click', auth);
   $('#btn-logout').addEventListener('click', function () { setSess(null); $('#sync').textContent = '이 기기에 저장됨'; });
   $('#btn-export').addEventListener('click', exportBackup);
   $('#btn-import').addEventListener('click', function () { $('#file-import').click(); });
