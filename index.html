@@ -234,6 +234,10 @@ body { margin: 0; }
 .unit small { display: block; font-weight: 500; font-size: 13px; color: var(--ink-2); }
 .pill.info { background: var(--accent-soft); color: var(--ink); }
 .pill.warn { background: var(--line); color: var(--ink-2); }
+.csign { flex: none; width: 76px; padding: 4px; background: none; border: 0; border-left: 1px solid var(--line); color: var(--ink-2); font: inherit; font-size: 12px; font-weight: 600; line-height: 1.3; }
+.csign.ok { color: var(--ok); }
+.csign.stale { color: var(--danger); }
+.paper .sum .sig { height: 9mm; }
 .prt { flex: none; width: 56px; background: none; border: 0; border-left: 1px solid var(--line); display: grid; place-items: center; }
 .prt svg { width: 22px; height: 22px; stroke: var(--ink); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .chk { display: flex; align-items: center; gap: 10px; min-height: 44px; font-weight: 500; }
@@ -607,6 +611,8 @@ body { margin: 0; }
     };
     var sl = cleanSlots(e.slots);
     if (sl) o.slots = sl;
+    // resident confirmation signature (optional): the count and fee shown when it was signed
+    if (validSign(e.confirm)) { o.confirm = e.confirm; o.confirmCount = Number(e.confirmCount) || 0; o.confirmFee = Number(e.confirmFee) || 0; }
     return o;
   }
   function loadJSON(key, fallback) {
@@ -1171,6 +1177,8 @@ body { margin: 0; }
     });
     $('#add-label').textContent = state.tab === 'cal' ? '수업 추가' : '신청서 추가';
   }
+  // signed, but the signed lesson count or fee has changed since
+  function confirmStale(e) { return e.confirmCount !== enrCount(e) || e.confirmFee !== enrFee(e); }
   var PRINTER = '<svg viewBox="0 0 24 24"><path d="M7 9V4h10v5M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"/><rect x="7" y="14" width="10" height="6" rx="1"/></svg>';
   function renderEnr() {
     var key = monthKey(state.month), list = enrOfMonth(key), m = Number(key.slice(5));
@@ -1189,6 +1197,8 @@ body { margin: 0; }
           '<span class="unit">' + esc(e.dong) + '동<small>' + esc(e.ho) + '호</small></span>' +
           '<span class="who"><b>' + esc(e.name) + '</b><em>' + esc(meta) + '</em></span>' +
         '</button>' +
+        '<button type="button" class="csign ' + (!validSign(e.confirm) ? '' : confirmStale(e) ? 'stale' : 'ok') + '" data-econfirm="' + esc(e.id) + '">' +
+          (!validSign(e.confirm) ? '사인 받기' : confirmStale(e) ? '변경됨 · 다시 사인' : '사인 완료 ✓') + '</button>' +
         '<button type="button" class="prt" data-eprint="' + esc(e.id) + '" aria-label="' + esc(e.name) + ' 신청서와 사인지 출력">' + PRINTER + '</button>' +
       '</li>';
     }).join('');
@@ -1365,7 +1375,7 @@ body { margin: 0; }
     var src = prevList.filter(function (e) { return have.indexOf(e.name + '|' + e.dong + '|' + e.ho) < 0; });
     if (!src.length) { toast(prevList.length ? '지난달 신청서는 이미 모두 복사돼 있어요' : '지난달 신청서가 없어요'); return; }
     src.forEach(function (e) {
-      state.enrollments.push(Object.assign({}, e, { id: newId(), month: key, periodStart: b[0], periodEnd: b[1] }));
+      state.enrollments.push(Object.assign({}, e, { id: newId(), month: key, periodStart: b[0], periodEnd: b[1], confirm: undefined, confirmCount: undefined, confirmFee: undefined }));
     });
     saveEnr(); render();
     toast(src.length + '건을 복사했어요. 요일과 횟수를 확인해 주세요');
@@ -1435,7 +1445,8 @@ body { margin: 0; }
       for (var i = 0; i < per; i++) {
         var e = part[i];
         rows += '<tr><td>' + (p * per + i + 1) + '</td><td>' + (e ? esc(e.dong) : '') + '</td><td>' + (e ? esc(e.ho) : '') + '</td><td>' + (e ? esc(e.name) : '') +
-          '</td><td class="num">' + (e ? enrCount(e) : '') + '</td><td class="num">' + (e ? fmt(enrFee(e)) : '') + '</td><td></td><td></td></tr>';
+          '</td><td class="num">' + (e ? enrCount(e) : '') + '</td><td class="num">' + (e ? fmt(enrFee(e)) : '') + '</td><td>' +
+          (e && validSign(e.confirm) ? '<svg class="sig" viewBox="0 0 ' + SW + ' ' + SH + '"><path d="' + e.confirm + '"/></svg>' : '') + '</td><td></td></tr>';
       }
       var sc = part.reduce(function (s, e) { return s + enrCount(e); }, 0), sf = part.reduce(function (s, e) { return s + enrFee(e); }, 0);
       rows += '<tr><td colspan="4" class="l">소계' + (p + 1) + '</td><td class="num">' + sc + '</td><td class="num">' + fmt(sf) + '</td><td></td><td></td></tr>';
@@ -1487,7 +1498,19 @@ body { margin: 0; }
     openPreview(Number(key.slice(5)) + '월 강습신청 현황', summaryPages(key), false);
   });
   $('#btn-copy').addEventListener('click', copyLastMonth);
-  $('#enr-list').addEventListener('click', function (e) {
+  $('#enr-list').addEventListener('click', async function (e) {
+    var cs = e.target.closest('[data-econfirm]');
+    if (cs) {
+      var ce = state.enrollments.find(function (x) { return x.id === cs.getAttribute('data-econfirm'); });
+      if (!ce) return;
+      if (validSign(ce.confirm)) {
+        if (!await ask('확인 사인', '확인 사인을 지우고 다시 받을까요?', '사인 삭제')) return;
+        ce = Object.assign({}, ce); delete ce.confirm; delete ce.confirmCount; delete ce.confirmFee;
+        putEnr(ce);
+      }
+      openConfirmSign(ce);
+      return;
+    }
     var p = e.target.closest('[data-eprint]');
     if (p) {
       var en = state.enrollments.find(function (x) { return x.id === p.getAttribute('data-eprint'); });
@@ -1533,7 +1556,7 @@ body { margin: 0; }
   });
 
   /* ---------- member signature: strokes stored as a compact SVG path (SW x SH box), ~1 KB each ---------- */
-  var SW = 300, SH = 100, signEv = null, strokes = [], cv = null;
+  var SW = 300, SH = 100, signEv = null, signEnrId = null, strokes = [], cv = null;
   function validSign(v) { return typeof v === 'string' && v.length < 20000 && /^[ML0-9. -]+$/.test(v); }
   function padXY(e) { var r = cv.getBoundingClientRect(); return [Math.round((e.clientX - r.left) / r.width * SW), Math.round((e.clientY - r.top) / r.height * SH)]; }
   function padDraw() {
@@ -1542,13 +1565,26 @@ body { margin: 0; }
     c.strokeStyle = getComputedStyle(cv).color; c.lineWidth = 2.4 * k; c.lineCap = c.lineJoin = 'round';
     strokes.forEach(function (s) { c.beginPath(); s.forEach(function (p, i) { if (i) c.lineTo(p[0] * k, p[1] * k); else c.moveTo(p[0] * k, p[1] * k); }); if (s.length === 1) c.lineTo(s[0][0] * k + 0.1, s[0][1] * k); c.stroke(); });
   }
+  // Same pad for two jobs: signEv = a lesson signature, signEnrId = the monthly 강습 확인 signature of a 신청서
+  function openPad() {
+    strokes = [];
+    $('#signm').hidden = false; document.body.classList.add('locked');
+    cv.width = cv.clientWidth * 2; cv.height = cv.width * SH / SW; padDraw();
+  }
+  function openConfirmSign(enr) {
+    signEv = null; signEnrId = enr.id;
+    $('#sign-title').textContent = '강습 확인 사인';
+    $('#sign-who').textContent = enr.name + ' 회원님, ' + Number(enr.month.slice(5)) + '월 강습 ' + enrCount(enr) + '회 · 강습료 ' + fmt(enrFee(enr)) + '원을 확인했어요. 아래 칸에 사인해 주세요.';
+    openPad();
+  }
   function openSign(ev) {
-    signEv = ev; strokes = [];
+    signEv = ev; signEnrId = null; strokes = [];
+    $('#sign-title').textContent = '회원 사인';
     $('#sign-who').textContent = ev.title + ' 회원님, 아래 칸에 사인해 주세요.';
     $('#signm').hidden = false; document.body.classList.add('locked');
     cv.width = cv.clientWidth * 2; cv.height = cv.width * SH / SW; padDraw();
   }
-  function closeSign() { $('#signm').hidden = true; document.body.classList.remove('locked'); signEv = null; }
+  function closeSign() { $('#signm').hidden = true; document.body.classList.remove('locked'); signEv = null; signEnrId = null; }
   cv = $('#signpad');
   cv.addEventListener('pointerdown', function (e) { cv.setPointerCapture(e.pointerId); strokes.push([padXY(e)]); padDraw(); });
   cv.addEventListener('pointermove', function (e) { if (!strokes.length || !cv.hasPointerCapture(e.pointerId)) return; var s = strokes[strokes.length - 1], p = padXY(e), q = s[s.length - 1]; if (p[0] !== q[0] || p[1] !== q[1]) { s.push(p); padDraw(); } });
@@ -1557,6 +1593,11 @@ body { margin: 0; }
   $('#sign-ok').addEventListener('click', async function () {
     if (!strokes.length) { toast('먼저 사인해 주세요'); return; }
     var d = strokes.map(function (s) { return 'M' + s[0].join(' ') + s.slice(1).map(function (p) { return 'L' + p.join(' '); }).join('') + (s.length === 1 ? 'L' + (s[0][0] + 1) + ' ' + s[0][1] : ''); }).join('');
+    if (signEnrId) {
+      var en = state.enrollments.find(function (x) { return x.id === signEnrId; }); closeSign();
+      if (en) { putEnr(Object.assign({}, en, { confirm: d, confirmCount: enrCount(en), confirmFee: enrFee(en) })); toast('확인 사인을 받았어요'); }
+      return;
+    }
     var ev = signEv; closeSign();
     await put(Object.assign({}, ev, { status: 'done', sign: d }));
   });
