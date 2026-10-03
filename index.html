@@ -274,6 +274,8 @@ body { margin: 0; }
   font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', 'IBM Plex Sans KR', sans-serif; font-size: 13.5px; line-height: 1.5;
   -webkit-print-color-adjust: exact; print-color-adjust: exact;
 }
+/* paper ignores theme tokens: no app rule (dark mode, .help, span...) may tint its text */
+.paper, .paper * { color: #000 !important; }
 /* left form (신청서): one uniform 10mm line pitch, like the paper original */
 .paper .lf { padding: 2mm 2mm 3mm; font-size: 16px; }
 .paper .lf .pt { font-size: 40px; letter-spacing: 0.5em; text-indent: 0.5em; line-height: 14mm; margin: 0 0 1mm; }
@@ -308,9 +310,9 @@ body { margin: 0; }
 .sname { font-size: 22px; font-weight: 700; margin: 0; overflow-wrap: anywhere; }
 .sask { font-size: 20px; line-height: 1.4; margin: 0; }
 .scard { display: grid; gap: 10px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); }
-.srow { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-.srow span { font-size: 18px; font-weight: 600; color: var(--ink); }
-.srow b { font-size: 32px; font-weight: 700; line-height: 1.2; color: var(--accent); font-variant-numeric: tabular-nums; }
+.crow { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.crow span { font-size: 18px; font-weight: 600; color: var(--ink); }
+.crow b { font-size: 32px; font-weight: 700; line-height: 1.2; color: var(--accent); font-variant-numeric: tabular-nums; }
 .padbox { position: relative; }
 .padhint { position: absolute; inset: 0; display: grid; place-items: center; font-size: 20px; color: var(--ink-2); pointer-events: none; }
 .sactions { display: flex; flex-direction: column; gap: 18px; margin-top: 4px; }
@@ -1793,8 +1795,8 @@ body { margin: 0; }
     signEv = null; signEnrId = enr.id;
     $('#sign-title').textContent = '강습 확인 사인';
     $('#sign-who').innerHTML = '<p class="sname">' + esc(enr.name) + ' 회원님</p>' +
-      '<div class="scard"><div class="srow"><span>' + Number(enr.month.slice(5)) + '월 강습 횟수</span><b>' + enrCount(enr) + '회</b></div>' +
-      '<div class="srow"><span>강습료</span><b>' + fmt(enrFee(enr)) + '원</b></div></div>' +
+      '<div class="scard"><div class="crow"><span>' + Number(enr.month.slice(5)) + '월 강습 횟수</span><b>' + enrCount(enr) + '회</b></div>' +
+      '<div class="crow"><span>강습료</span><b>' + fmt(enrFee(enr)) + '원</b></div></div>' +
       '<p class="sask">위 내용이 맞으면 아래 칸에 사인해 주세요.</p>';
     openPad();
   }
