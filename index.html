@@ -394,7 +394,7 @@ body { margin: 0; }
     <p id="editm-text"></p>
     <div class="actions" style="flex-direction:column">
       <button type="button" class="btn primary" id="editm-one">이 수업만 변경</button>
-      <button type="button" class="btn primary" id="editm-after">이 수업과 이후 같은 요일 수업 모두 변경</button>
+      <button type="button" class="btn primary" id="editm-after">이후 같은 요일 수업 변경</button>
       <button type="button" class="btn" id="editm-cancel">취소</button>
     </div>
   </div>
@@ -407,7 +407,8 @@ body { margin: 0; }
     <p id="delm-text"></p>
     <div class="actions" style="flex-direction:column">
       <button type="button" class="btn danger" id="delm-one">이 수업만 삭제</button>
-      <button type="button" class="btn danger" id="delm-after">이 수업과 이후 수업 모두 삭제</button>
+      <button type="button" class="btn danger" id="delm-week">이후 같은 요일 수업 삭제</button>
+      <button type="button" class="btn danger" id="delm-after">이후 수업 모두 삭제</button>
       <button type="button" class="btn" id="delm-cancel">취소</button>
     </div>
   </div>
@@ -898,7 +899,7 @@ body { margin: 0; }
   function askTimeChange(old, start, end, n) {
     $('#editm-text').textContent = longDate(old.date) + ' ' + old.title + ' 수업을 ' + old.start + '~' + old.end + ' → ' + start + '~' + end + '로 바꿀까요?';
     $('#editm-after').hidden = n < 2;
-    $('#editm-after').textContent = '이 수업과 이후 같은 요일 수업 모두 변경 (' + n + '개)';
+    $('#editm-after').textContent = '이후 같은 요일 수업 변경 (' + n + '개)';
     $('#editm').hidden = false;
     return new Promise(function (resolve) {
       function done(v) { $('#editm').hidden = true; $('#editm').onclick = $('#editm-one').onclick = $('#editm-after').onclick = $('#editm-cancel').onclick = null; resolve(v); }
@@ -927,19 +928,27 @@ body { margin: 0; }
       $('#confm-no').onclick = function () { done(false); };
     });
   }
-  // Same member's lessons on or after this one (same enrollment, or same name when there is none)
-  function lessonsFrom(ev) {
+  // Same member's lessons on or after this one (same enrollment, or same name when there is none).
+  // Signed (done) lessons are skipped; opts.sameWeekday keeps only ev's weekday. ev itself is always included.
+  function lessonsFrom(ev, opts) {
+    var wd = parse(ev.date).getDay();
     return state.events.filter(function (x) {
-      return x.date >= ev.date && (ev.enrollmentId ? x.enrollmentId === ev.enrollmentId : !x.enrollmentId && x.title === ev.title);
+      if (x.id === ev.id) return true;
+      if (x.status === 'done' || x.date < ev.date) return false;
+      if (opts && opts.sameWeekday && parse(x.date).getDay() !== wd) return false;
+      return ev.enrollmentId ? x.enrollmentId === ev.enrollmentId : !x.enrollmentId && x.title === ev.title;
     });
   }
   function removeCurrent() {
     var ev = state.events.find(function (x) { return x.id === state.editing; });
     if (!ev) return;
-    var n = lessonsFrom(ev).length;
+    var n = lessonsFrom(ev, { sameWeekday: true }).length, m = lessonsFrom(ev).length;
     $('#delm-text').textContent = longDate(ev.date) + ' ' + ev.title + ' 수업을 삭제할까요?';
-    $('#delm-after').hidden = n < 2;
-    $('#delm-after').textContent = '이 수업과 이후 수업 모두 삭제 (' + n + '개)';
+    // a choice that would delete the same lessons as another one is hidden
+    $('#delm-week').hidden = n < 2 || n === m;
+    $('#delm-week').textContent = '이후 같은 요일 수업 삭제 (' + n + '개)';
+    $('#delm-after').hidden = m < 2;
+    $('#delm-after').textContent = '이후 수업 모두 삭제 (' + m + '개)';
     $('#delm').hidden = false;
   }
   async function deleteLessons(ids) {
@@ -950,6 +959,10 @@ body { margin: 0; }
     } catch (err) { showErr('삭제하지 못했어요. 잠시 후 다시 시도해 주세요.'); }
   }
   $('#delm-one').addEventListener('click', function () { deleteLessons([state.editing]); });
+  $('#delm-week').addEventListener('click', function () {
+    var ev = state.events.find(function (x) { return x.id === state.editing; });
+    if (ev) deleteLessons(lessonsFrom(ev, { sameWeekday: true }).map(function (x) { return x.id; }));
+  });
   $('#delm-after').addEventListener('click', function () {
     var ev = state.events.find(function (x) { return x.id === state.editing; });
     if (ev) deleteLessons(lessonsFrom(ev).map(function (x) { return x.id; }));
