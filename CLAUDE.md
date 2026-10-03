@@ -25,6 +25,7 @@ The owner is learning to code (HTML/CSS basics, moving toward backend/AI enginee
 | `lesson-calendar-enroll-v1` | enrollments: `{ id, month: "YYYY-MM", name, dong, ho, phone, periodStart, periodEnd, days: [0-6], count, start, end, fee, appliedOn, slots?, confirm?, confirmCount?, confirmFee? }` |
 | `lesson-calendar-settings-v1` | `{ instructor, label }` (printed on forms; defaults 김민기 / 오전헬스) |
 
+- Colors belong to the household (동+호, or the name when there is none), not the member. `PALETTE` has 18 fixed colors; `settings.colors` (optional) maps household key to palette index, assigned once by `assignColors` (lowest index not held by an active household) and never changed afterwards. Stored in settings, so it is part of the backup and cloud payload.
 - `title` of an event is the member's name. Dates are local-time strings; never use `toISOString()` for dates.
 - An enrollment is one member's 신청서 for one month. Its calendar lessons are events with `enrollmentId`. If an event has no `enrollmentId`, it still counts for the sign sheet when `title === enrollment.name` and the date is in `enrollment.month` (see `lessonsFor`).
 - Sign-sheet rows come from `signedLessons(enr)` (only signed lessons, sorted by date/time), 11 rows per sheet, extra sheets are added automatically.

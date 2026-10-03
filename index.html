@@ -33,6 +33,7 @@
   --ok: #2C7A3F;
   --ok-soft: #DCF0E0;
   --danger: #B3261E;
+  --ld: 0%;
   --scrim: rgba(10, 20, 17, 0.45);
   --f-display: 'Do Hyeon', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
   --f-body: 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
@@ -52,6 +53,7 @@
     --ok: #7FD394;
     --ok-soft: #1C3524;
     --danger: #FF8F86;
+    --ld: 16%;
     --scrim: rgba(0, 0, 0, 0.6);
     --stage: #0A0F0D;
     color-scheme: dark;
@@ -71,6 +73,7 @@
   --ok: #7FD394;
   --ok-soft: #1C3524;
   --danger: #FF8F86;
+  --ld: 16%;
   --scrim: rgba(0, 0, 0, 0.6);
   --stage: #0A0F0D;
   color-scheme: dark;
@@ -128,8 +131,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .chip {
   display: block; min-width: 0; font-size: 10px; line-height: 1.25; padding: 1px 3px; border-radius: 4px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink);
-  background: hsl(var(--h) 65% 50% / 0.18); border-left: 3px solid hsl(var(--h) 60% 46%);
+  background: hsl(var(--h) var(--s) calc(var(--l) * 1% + var(--ld)) / 0.18); border-left: 3px solid var(--hc);
 }
+/* household color: --h --s --l come from PALETTE (light values), --ld lifts lightness in dark mode */
+.hh { --hc: hsl(var(--h) var(--s) calc(var(--l) * 1% + var(--ld))); }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--hc); margin-right: 8px; vertical-align: 1px; }
 .more { font-size: 10px; color: var(--ink-2); text-align: center; line-height: 1; }
 
 /* agenda */
@@ -140,7 +146,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .lesson { display: flex; align-items: stretch; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
 .lesson-main { flex: 1; min-width: 0; display: flex; gap: 12px; align-items: center; text-align: left; background: none; border: 0; padding: 12px 8px 12px 12px; }
-.bar { width: 4px; align-self: stretch; border-radius: 4px; background: hsl(var(--h) 60% 46%); flex: none; }
+.bar { width: 4px; align-self: stretch; border-radius: 4px; background: var(--hc); flex: none; }
 .time { flex: none; width: 46px; font-variant-numeric: tabular-nums; font-weight: 600; font-size: 15px; line-height: 1.2; }
 .time small { display: block; font-weight: 400; font-size: 12px; color: var(--ink-2); }
 .who { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
@@ -469,7 +475,7 @@ body { margin: 0; }
 <div class="scrim" id="esheet" hidden>
   <form class="panel" id="eform" role="dialog" aria-modal="true" aria-labelledby="e-title" novalidate>
     <div class="grab"></div>
-    <h2 id="e-title">신청서 등록</h2>
+    <h2 id="e-title"><span class="dot hh" id="e-dot" hidden></span><span id="e-title-t">신청서 등록</span></h2>
     <label class="fld"><span>성명</span><input type="text" id="g-name" list="g-members" autocomplete="off" placeholder="예: 김민지"></label>
     <datalist id="g-members"></datalist>
     <div class="row2">
@@ -558,14 +564,52 @@ body { margin: 0; }
   function toMin(t) { var p = t.split(':').map(Number); return p[0] * 60 + p[1]; }
   function fromMin(n) { n = ((n % 1440) + 1440) % 1440; return pad(Math.floor(n / 60)) + ':' + pad(n % 60); }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
-  function hue(name) { var h = 0; for (var i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360; return h; }
+  // Household colors: one fixed palette, [hue, saturation %, lightness %]; neighbours in the list are far apart, the last six differ in tone
+  var PALETTE = [[245, 62, 44], [28, 62, 44], [305, 62, 44], [95, 62, 40], [195, 62, 40], [345, 62, 44], [70, 62, 40], [265, 62, 44], [160, 55, 38], [45, 62, 42], [325, 62, 44], [285, 55, 44],
+    [28, 38, 30], [215, 22, 46], [70, 42, 32], [285, 30, 34], [350, 38, 58], [175, 50, 27]];
+  // key = 동|호 so all members of one 신청서 (and the same household next month) share a color; name when there is no 동/호
+  function householdKey(enr) { return enr.dong && enr.ho ? enr.dong + '|' + enr.ho : 'n:' + enr.name; }
+  function lessonKey(ev) {
+    var en = (ev.enrollmentId && state.enrollments.find(function (e) { return e.id === ev.enrollmentId; })) ||
+      state.enrollments.find(function (e) { return e.name === ev.title; });
+    return en ? householdKey(en) : 'n:' + (ev.title || '');
+  }
+  function hh(key) {
+    var c = PALETTE[state.settings.colors[key]] || PALETTE[0];
+    return '--h:' + c[0] + ';--s:' + c[1] + '%;--l:' + c[2];
+  }
+  function cleanColors(c) {
+    var out = {};
+    Object.keys(c && typeof c === 'object' ? c : {}).forEach(function (k) { if (Number.isInteger(c[k]) && c[k] >= 0 && c[k] < PALETTE.length) out[k] = c[k]; });
+    return out;
+  }
+  // Give every household without a color the lowest palette index not held by an active household
+  // (lessons or a 신청서 within the last 3 months or later). A color, once assigned, never changes.
+  // With more active households than colors, take the index whose holders were active longest ago.
+  function assignColors() {
+    var colors = state.settings.colors, first = {}, last = {}, changed = false;
+    function note(k, a, b) { if (!(k in first) || a < first[k]) first[k] = a; if (!(k in last) || b > last[k]) last[k] = b; }
+    state.enrollments.forEach(function (e) { note(householdKey(e), e.month + '-01', e.month + '-31'); });
+    state.events.forEach(function (e) { note(lessonKey(e), e.date, e.date); });
+    var cutoff = shiftKey(monthKey(new Date()), -3) + '-01';
+    Object.keys(first).sort(function (a, b) { return first[a] < first[b] ? -1 : first[a] > first[b] ? 1 : a < b ? -1 : 1; }).forEach(function (k) {
+      if (k in colors) return;
+      var held = {};
+      Object.keys(colors).forEach(function (o) { if (o in last && last[o] >= cutoff) { var c = colors[o]; if (!(c in held) || last[o] > held[c]) held[c] = last[o]; } });
+      var pick = -1;
+      for (var i = 0; i < PALETTE.length && pick < 0; i++) if (!(i in held)) pick = i;
+      if (pick < 0) for (var j = 0; j < PALETTE.length; j++) if (pick < 0 || held[j] < held[pick]) pick = j;
+      colors[k] = pick; changed = true;
+    });
+    if (changed) saveSettings();
+  }
   function newId() { return 'e' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
   var now = new Date();
   var state = {
     events: [],
     enrollments: [],
-    settings: { instructor: '김민기', label: '오전헬스' },
+    settings: { instructor: '김민기', label: '오전헬스', colors: {} },
     tab: 'cal',
     mode: 'local',
     selected: ymd(now),
@@ -632,6 +676,7 @@ body { margin: 0; }
     if (s && typeof s === 'object') {
       if (typeof s.instructor === 'string') state.settings.instructor = s.instructor;
       if (typeof s.label === 'string') state.settings.label = s.label;
+      state.settings.colors = cleanColors(s.colors);
     }
     try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
     syncAllEnrollments();
@@ -676,7 +721,7 @@ body { margin: 0; }
   function adopt(data) {
     state.events = (data.events || []).filter(validEvent);
     state.enrollments = (data.enrollments || []).filter(validEnr).map(cleanEnr);
-    if (data.settings) { state.settings.instructor = data.settings.instructor || state.settings.instructor; state.settings.label = data.settings.label || state.settings.label; }
+    if (data.settings) { state.settings.instructor = data.settings.instructor || state.settings.instructor; state.settings.label = data.settings.label || state.settings.label; if (data.settings.colors) state.settings.colors = cleanColors(data.settings.colors); }
     syncAllEnrollments(true);
     lsSave(); saveEnr(); saveSettings(); render();
   }
@@ -754,7 +799,7 @@ body { margin: 0; }
       if (s === state.selected) cls += ' sel';
       if (s === todayS) cls += ' today';
       var chips = list.slice(0, 2).map(function (e) {
-        return '<span class="chip" style="--h:' + hue(e.title || '') + '">' + esc(e.title) + '</span>';
+        return '<span class="chip hh" style="' + hh(lessonKey(e)) + '">' + esc(e.title) + '</span>';
       }).join('');
       if (list.length > 2) chips += '<span class="more">+' + (list.length - 2) + '</span>';
       html += '<button type="button" class="' + cls + '" data-date="' + s + '" aria-label="' +
@@ -780,7 +825,7 @@ body { margin: 0; }
     $('#list').innerHTML = list.map(function (e) {
       var st = e.status || 'scheduled';
       var pill = st === 'done' ? '<span class="pill done">완료</span>' : st === 'cancelled' ? '<span class="pill cancelled">취소</span>' : '';
-      return '<li class="lesson st-' + st + '" style="--h:' + hue(e.title || '') + '">' +
+      return '<li class="lesson hh st-' + st + '" style="' + hh(lessonKey(e)) + '">' +
         '<span class="bar"></span>' +
         '<button type="button" class="lesson-main" data-edit="' + esc(e.id) + '">' +
           '<span class="time">' + esc(e.start) + '<small>' + esc(e.end) + '</small></span>' +
@@ -791,7 +836,7 @@ body { margin: 0; }
     }).join('');
   }
 
-  function render() { renderHead(); renderGrid(); renderAgenda(); renderEnr(); renderTabs(); }
+  function render() { assignColors(); renderHead(); renderGrid(); renderAgenda(); renderEnr(); renderTabs(); }
 
   /* ---------- toast ---------- */
   var toastTimer = null;
@@ -1192,7 +1237,7 @@ body { margin: 0; }
     }
     $('#enr-list').innerHTML = list.map(function (e) {
       var meta = [dayText(e, '·') || '요일 미정', timeText(e), enrCount(e) + '회', fmt(enrFee(e)) + '원'].join(' · ');
-      return '<li class="enr" style="--h:' + hue(e.name) + '"><span class="bar"></span>' +
+      return '<li class="enr hh" style="' + hh(householdKey(e)) + '"><span class="bar"></span>' +
         '<button type="button" class="enr-main" data-eedit="' + esc(e.id) + '">' +
           '<span class="unit">' + esc(e.dong) + '동<small>' + esc(e.ho) + '호</small></span>' +
           '<span class="who"><b>' + esc(e.name) + '</b><em>' + esc(meta) + '</em></span>' +
@@ -1261,7 +1306,9 @@ body { margin: 0; }
     eState.editing = enr ? enr.id : null;
     eState.periodDirty = !!enr;
     var key = date ? date.slice(0, 7) : monthKey(state.month), b = monthBounds(enr ? enr.month : key);
-    $('#e-title').textContent = enr ? '신청서 수정' : date ? '수업 등록' : '신청서 등록';
+    $('#e-title-t').textContent = enr ? '신청서 수정' : date ? '수업 등록' : '신청서 등록';
+    $('#e-dot').hidden = !enr;
+    if (enr) { $('#e-dot').setAttribute('style', hh(householdKey(enr))); }
     $('#g-name').value = enr ? enr.name : '';
     $('#g-dong').value = enr ? enr.dong : '';
     $('#g-ho').value = enr ? enr.ho : '';
@@ -1658,6 +1705,8 @@ body { margin: 0; }
       if (data && data.settings && typeof data.settings === 'object') {
         if (typeof data.settings.instructor === 'string') state.settings.instructor = data.settings.instructor;
         if (typeof data.settings.label === 'string') state.settings.label = data.settings.label;
+        // keep colors already assigned on this device, add the imported ones
+        state.settings.colors = Object.assign(cleanColors(data.settings.colors), state.settings.colors);
         saveSettings();
       }
       syncAllEnrollments(true);
