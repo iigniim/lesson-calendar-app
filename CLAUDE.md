@@ -52,6 +52,7 @@ The 회원 column of the 선생님 보관용 table shows the member's signature.
 ## Service worker
 
 Bump `CACHE` in `sw.js` on every deploy that changes app files, or installed phones keep the old version.
+The worker installs with `cache: 'reload'`, navigations use `cache: 'no-store'` (network first, cache only offline), and `skipWaiting()`/`clients.claim()` are on. When a new worker takes over, the page shows a "새 버전이 있어요" bar with a reload button (never reloads by itself). The 설정·백업 sheet shows `버전 vNN`, read from the cache name, so `CACHE` is the only place the version lives.
 
 ## UI conventions
 

@@ -205,6 +205,8 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 .btn.danger { color: var(--danger); border-color: var(--danger); flex: 1; }
 .btn:disabled { opacity: 0.55; }
 
+.upd { bottom: calc(140px + env(safe-area-inset-bottom, 0px)); z-index: 41; display: flex; align-items: center; gap: 10px; border-radius: 16px; }
+.upd button { min-height: 40px; padding: 0 14px; border: 0; border-radius: 99px; background: var(--bg); color: var(--ink); font: inherit; font-weight: 600; }
 .toast {
   position: fixed; z-index: 40; left: 50%; transform: translateX(-50%);
   bottom: calc(88px + env(safe-area-inset-bottom, 0px));
@@ -434,6 +436,7 @@ body { margin: 0; }
     <h2 id="backup-title">백업·복원</h2>
     <p class="help">일정은 이 기기의 브라우저 저장소에 들어 있어요. 앱을 지우거나 폰을 바꾸면 사라질 수 있으니 가끔 백업 파일을 받아 두세요.</p>
     <p class="help" id="backup-count"></p>
+    <p class="help" id="app-version"></p>
     <label class="fld"><span>강사명 (신청서와 현황에 인쇄돼요)</span><input type="text" id="s-inst" autocomplete="off"></label>
     <label class="fld"><span>종목 표기 (현황 오른쪽 위, 비워도 돼요)</span><input type="text" id="s-label" autocomplete="off" placeholder="예: 오전헬스"></label>
     <div class="stack">
@@ -534,6 +537,7 @@ body { margin: 0; }
 </div>
 
 <div class="toast" id="toast" role="status" hidden></div>
+<div class="toast upd" id="upd" role="status" hidden><span>새 버전이 있어요.</span><button type="button" id="upd-reload">새로고침</button></div>
 
 <script>
 (function () {
@@ -1483,7 +1487,16 @@ body { margin: 0; }
 
   /* ---------- backup / restore ---------- */
   function backupMsg(m, ok) { var e = $('#backup-msg'); e.textContent = m; e.hidden = !m; e.style.color = ok ? 'var(--ok)' : 'var(--danger)'; }
+  // Version = the cache name of the running service worker (CACHE in sw.js), the single source of truth
+  function showVersion() {
+    if (!window.caches) return;
+    caches.keys().then(function (keys) {
+      var k = keys.filter(function (x) { return /^lesson-calendar-v\d+$/.test(x); })[0];
+      $('#app-version').textContent = k ? '버전 ' + k.replace('lesson-calendar-', '') : '';
+    }).catch(function () {});
+  }
   function openBackup() {
+    showVersion();
     $('#backup-count').textContent = '저장된 수업 ' + state.events.length + '개 · 신청서 ' + state.enrollments.length + '건';
     $('#s-inst').value = state.settings.instructor;
     $('#s-label').value = state.settings.label;
@@ -1551,7 +1564,17 @@ body { margin: 0; }
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$('#backup').hidden) closeBackup(); });
 
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-    window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
+    // A controller before registering means this is an update, not the first install
+    var hadController = !!navigator.serviceWorker.controller;
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js').then(function (reg) {
+        // an installed PWA can stay open for days: look for a new version whenever it comes to the front
+        document.addEventListener('visibilitychange', function () { if (!document.hidden) reg.update().catch(function () {}); });
+      }).catch(function () {});
+    });
+    // Only ask: reloading by itself could wipe a half-typed form
+    navigator.serviceWorker.addEventListener('controllerchange', function () { if (hadController) $('#upd').hidden = false; });
+    $('#upd-reload').addEventListener('click', function () { location.reload(); });
   }
 
   showCloud();
