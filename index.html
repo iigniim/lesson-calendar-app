@@ -615,7 +615,7 @@ body { margin: 0; }
   async function put(ev) {
     var i = state.events.findIndex(function (e) { return e.id === ev.id; });
     if (i >= 0) state.events[i] = ev; else state.events.push(ev);
-    lsSave(); render();
+    lsSave(); syncEnrFromLessons(ev.enrollmentId); render();
   }
   function initStore() {
     state.mode = 'local';
@@ -870,12 +870,11 @@ body { margin: 0; }
           if (choice === 'one') after = [];
           else {
             after.forEach(function (x) { x.start = start; x.end = end; });
-            var enrChanged = syncEnrTime(old, wd, start, end);
           }
         }
         if (after.length) {
           state.events[state.events.findIndex(function (x) { return x.id === upd.id; })] = upd;
-          lsSave(); if (enrChanged) saveEnr();
+          lsSave(); syncEnrFromLessons(old.enrollmentId);
           toast((after.length + 1) + '개 수업 시간을 바꿨어요');
         } else {
           await put(upd);
@@ -913,15 +912,6 @@ body { margin: 0; }
       $('#editm-cancel').onclick = function () { done(null); };
       $('#editm').onclick = function (e) { if (e.target === $('#editm')) done(null); };
     });
-  }
-  // Keep the 신청서 time in step so editing it later does not bring the old time back; true if changed
-  function syncEnrTime(ev, wd, start, end) {
-    var enr = state.enrollments.find(function (e) { return e.id === ev.enrollmentId; });
-    if (!enr) return false;
-    if (enr.slots) enr.slots[wd] = { start: start, end: end };
-    else if (enr.days.length === 1) { enr.start = start; enr.end = end; }
-    else return false;
-    return true;
   }
   // Delete-style popup for every destructive action: resolves true (ok) or false (cancel)
   function ask(title, text, okLabel) {
@@ -969,8 +959,19 @@ body { margin: 0; }
   async function deleteLessons(ids) {
     $('#delm').hidden = true;
     try {
+      var enrIds = {};
+      state.events.forEach(function (e) { if (ids.indexOf(e.id) >= 0 && e.enrollmentId) enrIds[e.enrollmentId] = 1; });
       state.events = state.events.filter(function (e) { return ids.indexOf(e.id) < 0; });
-      lsSave(); render(); closeSheet(); toast(ids.length + '개 삭제했어요');
+      lsSave(); Object.keys(enrIds).forEach(syncEnrFromLessons); render(); closeSheet(); toast(ids.length + '개 삭제했어요');
+      // the last lesson is gone: offer to remove the empty 신청서 (signed lessons are not events of an empty enrollment, so none are lost)
+      for (var k of Object.keys(enrIds)) {
+        var enr = state.enrollments.find(function (e) { return e.id === k; });
+        if (!enr || lessonsFor(enr).length) continue;
+        $('#confm-no').textContent = '남겨두기';
+        var yes = await ask('신청서 삭제', '이 신청서에 남은 수업이 없어요. 신청서도 삭제할까요?', '신청서 삭제');
+        $('#confm-no').textContent = '취소';
+        if (yes) { state.enrollments = state.enrollments.filter(function (e) { return e.id !== k; }); saveEnr(); render(); }
+      }
     } catch (err) { showErr('삭제하지 못했어요. 잠시 후 다시 시도해 주세요.'); }
   }
   $('#delm-one').addEventListener('click', function () { deleteLessons([state.editing]); });
@@ -1084,6 +1085,45 @@ body { margin: 0; }
     return ENR_DAYS.filter(function (d) { return enr.days.indexOf(d[0]) >= 0; }).map(function (d) {
       var t = slotOf(enr, d[0]); return d[1] + ' ' + t.start + '~' + t.end;
     }).join(', ');
+  }
+  // The calendar is the source of truth: days, time and period of a 신청서 follow its lessons.
+  // Upcoming unsigned lessons win; without any, all lessons count. Saves only when something changed.
+  function syncEnrFromLessons(id) {
+    var enr = id && state.enrollments.find(function (e) { return e.id === id; });
+    if (!enr) return false;
+    var all = lessonsFor(enr);
+    if (!all.length) return false;
+    var today = ymd(new Date());
+    var up = all.filter(function (l) { return l.status === 'scheduled' && l.date >= today; });
+    var src = up.length ? up : all, first = {};
+    src.forEach(function (l) { var d = parse(l.date).getDay(); if (!first[d]) first[d] = l; });
+    var days = Object.keys(first).map(Number).sort(function (a, b) { return a - b; });
+    var base = src[0], slots = {}, n = 0;
+    days.forEach(function (d) {
+      var l = first[d];
+      if (l.start !== base.start || l.end !== base.end) { slots[d] = { start: l.start, end: l.end }; n++; }
+    });
+    var inMonth = all.filter(function (l) { return l.date.slice(0, 7) === enr.month; });
+    var next = Object.assign({}, enr, { days: days, start: base.start, end: base.end });
+    if (n) next.slots = slots; else delete next.slots;
+    if (inMonth.length) { next.periodStart = inMonth[0].date; next.periodEnd = inMonth[inMonth.length - 1].date; }
+    var key = function (e) { return JSON.stringify([e.days, e.start, e.end, e.slots || null, e.periodStart, e.periodEnd]); };
+    if (key(next) === key(enr)) return false;
+    state.enrollments[state.enrollments.indexOf(enr)] = next;
+    saveEnr();
+    return true;
+  }
+  // Printed 신청서 shows one weekday and time: the weekday with most lessons (tie: earliest lesson), its most common time (tie: earliest)
+  function repDay(enr) {
+    var ls = lessonsFor(enr).filter(function (l) { return l.date.slice(0, 7) === enr.month; });
+    if (!ls.length) return { day: enr.days[0], start: enr.start, end: enr.end };
+    var cnt = {}, order = [];
+    ls.forEach(function (l) { var d = parse(l.date).getDay(); if (!(d in cnt)) { cnt[d] = 0; order.push(d); } cnt[d]++; });
+    var day = order.reduce(function (best, d) { return cnt[d] > cnt[best] ? d : best; }, order[0]);
+    var mine = ls.filter(function (l) { return parse(l.date).getDay() === day; }), tc = {}, bestT = null;
+    mine.forEach(function (l) { var k = l.start + '|' + l.end; tc[k] = (tc[k] || 0) + 1; });
+    mine.forEach(function (l) { var k = l.start + '|' + l.end; if (!bestT || tc[k] > tc[bestT]) bestT = k; });
+    return { day: day, start: bestT.split('|')[0], end: bestT.split('|')[1] };
   }
   function genDates(enr) {
     var out = [];
@@ -1282,6 +1322,7 @@ body { margin: 0; }
       state.events.push({ id: newId(), title: person, date: d, start: t.start, end: t.end, memo: '', status: 'scheduled', enrollmentId: enr.id });
     });
     if (gen || changed) saveEvents();
+    syncEnrFromLessons(enr.id);
     var d0 = parse(enr.month + '-01');
     state.month = new Date(d0.getFullYear(), d0.getMonth(), 1);
     closeEnr(); render();
@@ -1313,14 +1354,15 @@ body { margin: 0; }
     var ps = enr.periodStart ? parse(enr.periodStart) : null, pe = enr.periodEnd ? parse(enr.periodEnd) : null;
     var ap = parse(monthBounds(enr.month)[1]); // last day of the lesson month
     var part = function (s, i) { return s ? s.split(':')[i] : ''; };
-    var dayList = ENR_DAYS.map(function (d) { return enr.days.indexOf(d[0]) >= 0 ? '<span class="ring">' + d[1] + '</span>' : d[1]; }).join(', ');
+    var rep = repDay(enr);
+    var dayList = ENR_DAYS.map(function (d) { return d[0] === rep.day ? '<span class="ring">' + d[1] + '</span>' : d[1]; }).join(', ');
     return '<div class="pf lf">' +
       '<h3 class="pt">신 청 서</h3>' +
       '<p style="padding-left:20mm">' + fill(Number(enr.month.slice(5))) + '월 헬스 <u>소그룹, 개인 강습</u></p>' +
       '<p>▶▷ 강습에 대하여 다음 사항을 참조해 주시기 바랍니다.</p>' +
       '<p>1. 한 달 강습 등록 기간은 ' + fill(ps ? ps.getMonth() + 1 : '') + ' / ' + fill(ps ? ps.getDate() : '') + ' 부터 ' + fill(pe ? pe.getMonth() + 1 : '') + ' / ' + fill(pe ? pe.getDate() : '') + ' 까지 입니다.</p>' +
       '<p>2. 강습 요일은 ( ' + dayList + ' ) 이며, 총, ' + fill(enrCount(enr)) + ' 회 입니다.</p>' +
-      '<p>3. 강습 시간은 ' + (enr.slots && Object.keys(enr.slots).length ? fill(timeText(enr)) : fill(part(enr.start, 0)) + ' : ' + fill(part(enr.start, 1)) + ' ~ ' + fill(part(enr.end, 0)) + ' : ' + fill(part(enr.end, 1))) + ' 입니다.</p>' +
+      '<p>3. 강습 시간은 ' + fill(part(rep.start, 0)) + ' : ' + fill(part(rep.start, 1)) + ' ~ ' + fill(part(rep.end, 0)) + ' : ' + fill(part(rep.end, 1)) + ' 입니다.</p>' +
       '<p>4. 강습료는 월 ' + fill(fmt(enrFee(enr)), 'w') + '원 이며, 매달 관리비에</p>' +
       '<p class="i1">자동 부과 됩니다. (강습료는 후부과 처리 됩니다.)</p>' +
       '<p class="i1">※ 강사와 직접 현금거래로 인한 불이익은 당 스포츠센터는</p>' +

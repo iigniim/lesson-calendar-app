@@ -33,6 +33,9 @@ The owner is learning to code (HTML/CSS basics, moving toward backend/AI enginee
 - Backup file: `{ app: "lesson-calendar", version: 2, events, enrollments, settings }`. Import also accepts the old version 1 (events only) and merges by `id`. Keep new fields optional so old backups stay valid.
 - `slots` (optional on an enrollment): `{ "2": { start, end }, "3": { start, end } }`, keyed by weekday number. A weekday with a slot uses that time, every other weekday uses the enrollment's `start`/`end` (`slotOf`, `timeText`). Used when generating calendar lessons, redoing lessons on edit, copying last month and the printed 신청서/사인지. Missing `slots` = old data, everything uses `start`/`end`.
 
+- The calendar is the source of truth for an enrollment's `days`, `start`/`end`, `slots` and `periodStart`/`periodEnd`: `syncEnrFromLessons` recomputes them from the enrollment's lessons after every lesson edit, time change, delete, sign/un-sign and enrollment save (upcoming unsigned lessons win for days/times; the period spans the first and last lesson of the month). Deleting the last lesson asks whether to delete the 신청서 too.
+- The printed 신청서 shows one representative weekday and time (`repDay`: the weekday with most lessons, its most common time); the sign sheet still lists every real lesson.
+
 ## The paper forms
 
 The two forms come from the owner's workplace (Acrovista Sports Community): 신청서 + 선생님 보관용 on one landscape A4, and the monthly 종목별 입주민 강습신청 현황 on portrait A4. The original scans are photos, so the layouts are redrawn in HTML/CSS. If the owner changes a form, edit `signLeft`, `signRight`, `summaryPages` and the `.paper` CSS, then check the result as a PDF (Playwright `page.pdf` with `prefer_css_page_size`) to confirm the page count.
