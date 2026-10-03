@@ -187,6 +187,8 @@ input[type=text], input[type=date], input[type=time], input[type=number], select
   border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; min-height: 44px;
 }
 textarea { resize: vertical; }
+.slot { display: grid; grid-template-columns: 28px 1fr 1fr; gap: 10px; align-items: center; margin-bottom: 6px; }
+.slot b { font-size: 14px; color: var(--ink-2); }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 .segs { display: flex; gap: 6px; margin-top: 4px; }
@@ -480,6 +482,7 @@ body { margin: 0; }
       </div>
       <input type="hidden" id="g-end">
     </div>
+    <div id="g-slots"></div>
     <div id="g-gen-box">
       <label class="chk"><input type="checkbox" id="g-gen" checked><span>달력에 수업 일정 만들기</span></label>
       <p class="help" id="g-gen-note"></p>
@@ -567,13 +570,25 @@ body { margin: 0; }
   }
   function saveSettings() { try { localStorage.setItem(LS_S, JSON.stringify(state.settings)); pushSoon(); } catch (e) {} }
   function validEnr(e) { return e && typeof e.id === 'string' && typeof e.name === 'string' && /^\d{4}-\d{2}$/.test(e.month || ''); }
+  // slots (optional): { weekday: { start, end } } overrides start/end for that weekday
+  function cleanSlots(sl) {
+    var out = {}, n = 0;
+    Object.keys(sl && typeof sl === 'object' ? sl : {}).forEach(function (k) {
+      var v = sl[k];
+      if (k >= 0 && k <= 6 && v && /^\d{2}:\d{2}$/.test(v.start || '') && /^\d{2}:\d{2}$/.test(v.end || '')) { out[k] = { start: v.start, end: v.end }; n++; }
+    });
+    return n ? out : null;
+  }
   function cleanEnr(e) {
-    return {
+    var o = {
       id: e.id, month: e.month, name: String(e.name), dong: String(e.dong || ''), ho: String(e.ho || ''), phone: String(e.phone || ''),
       periodStart: e.periodStart || '', periodEnd: e.periodEnd || '',
       days: Array.isArray(e.days) ? e.days.filter(function (n) { return n >= 0 && n <= 6; }) : [],
       count: Number(e.count) || 0, start: e.start || '10:00', end: e.end || '10:50', fee: Number(e.fee) || 0, appliedOn: e.appliedOn || ''
     };
+    var sl = cleanSlots(e.slots);
+    if (sl) o.slots = sl;
+    return o;
   }
   function loadJSON(key, fallback) {
     try { var v = JSON.parse(localStorage.getItem(key)); return v == null ? fallback : v; } catch (e) { return fallback; }
@@ -980,6 +995,13 @@ body { margin: 0; }
   function dayText(enr, sep) {
     return ENR_DAYS.filter(function (d) { return enr.days.indexOf(d[0]) >= 0; }).map(function (d) { return d[1]; }).join(sep);
   }
+  function slotOf(enr, d) { return (enr.slots && enr.slots[d]) || { start: enr.start, end: enr.end }; }
+  function timeText(enr) {
+    if (!enr.slots || !Object.keys(enr.slots).length) return enr.start + '~' + enr.end;
+    return ENR_DAYS.filter(function (d) { return enr.days.indexOf(d[0]) >= 0; }).map(function (d) {
+      var t = slotOf(enr, d[0]); return d[1] + ' ' + t.start + '~' + t.end;
+    }).join(', ');
+  }
   function genDates(enr) {
     var out = [];
     if (!enr.periodStart || !enr.periodEnd || !enr.days.length) return out;
@@ -1015,7 +1037,7 @@ body { margin: 0; }
       return;
     }
     $('#enr-list').innerHTML = list.map(function (e) {
-      var meta = [dayText(e, '·') || '요일 미정', e.start + '~' + e.end, enrCount(e) + '회', fmt(enrFee(e)) + '원'].join(' · ');
+      var meta = [dayText(e, '·') || '요일 미정', timeText(e), enrCount(e) + '회', fmt(enrFee(e)) + '원'].join(' · ');
       return '<li class="enr" style="--h:' + hue(e.name) + '"><span class="bar"></span>' +
         '<button type="button" class="enr-main" data-eedit="' + esc(e.id) + '">' +
           '<span class="unit">' + esc(e.dong) + '동<small>' + esc(e.ho) + '호</small></span>' +
@@ -1027,14 +1049,19 @@ body { margin: 0; }
   }
 
   /* ---- enrollment sheet ---- */
-  var eState = { editing: null, periodDirty: false, edur: 50 };
+  var eState = { editing: null, periodDirty: false, edur: 50, slots: {} };
   function setDays(list) {
     document.querySelectorAll('#g-days input').forEach(function (i) { i.checked = list.indexOf(Number(i.value)) >= 0; });
   }
   function readEnr() {
     var days = [];
     document.querySelectorAll('#g-days input:checked').forEach(function (i) { days.push(Number(i.value)); });
-    return {
+    var slots = {}, n = 0;
+    days.forEach(function (d) {
+      var t = eState.slots[d];
+      if (t && (t.start !== $('#g-start').value || t.end !== $('#g-end').value)) { slots[d] = t; n++; }
+    });
+    var enr = {
       id: eState.editing || 'pending',
       month: $('#g-month').value,
       name: $('#g-name').value.trim(),
@@ -1047,6 +1074,19 @@ body { margin: 0; }
       start: $('#g-start').value,
       end: $('#g-end').value
     };
+    if (n) enr.slots = slots;
+    return enr;
+  }
+  // one row per checked weekday: its own start time and length (defaults to the 시작/수업 시간 above)
+  function renderSlots() {
+    var def = { start: $('#g-start').value, end: $('#g-end').value }, html = '';
+    ENR_DAYS.forEach(function (d) {
+      if (!document.querySelector('#g-days input[value="' + d[0] + '"]').checked) return;
+      var t = eState.slots[d[0]] || def, dur = toMin(t.end) - toMin(t.start) === 30 ? 30 : 50;
+      html += '<div class="slot" data-d="' + d[0] + '"><b>' + d[1] + '</b><input type="time" step="300" value="' + esc(t.start) + '">' +
+        '<select><option value="30"' + (dur === 30 ? ' selected' : '') + '>30분</option><option value="50"' + (dur === 50 ? ' selected' : '') + '>50분</option></select></div>';
+    });
+    $('#g-slots').innerHTML = html ? '<p class="help">요일마다 시간이 다르면 아래에서 바꿔 주세요. 안 바꾸면 위의 시간이 쓰여요.</p>' + html : '';
   }
   // Lessons are 30 or 50 minutes; show the matching button (anything else falls back to 50)
   function syncDur() {
@@ -1054,6 +1094,7 @@ body { margin: 0; }
     document.querySelector('#g-dur input[value="' + eState.edur + '"]').checked = true;
   }
   function updateEnrHints() {
+    renderSlots();
     var tmp = readEnr(), ds = genDates(tmp), note = $('#g-gen-note');
     if (!tmp.days.length) note.textContent = '요일을 고르면 달력에 넣을 날짜를 미리 보여 드려요.';
     else if (!ds.length) note.textContent = '등록 기간 안에 고른 요일이 없어요.';
@@ -1076,6 +1117,7 @@ body { margin: 0; }
     $('#g-start').value = enr ? enr.start : '10:00';
     $('#g-end').value = enr ? enr.end : '10:50';
     syncDur();
+    eState.slots = enr && enr.slots ? JSON.parse(JSON.stringify(enr.slots)) : {};
     var names = {};
     state.enrollments.forEach(function (e) { names[e.name] = 1; });
     $('#g-members').innerHTML = Object.keys(names).sort().map(function (n) { return '<option value="' + esc(n) + '">'; }).join('');
@@ -1107,6 +1149,7 @@ body { margin: 0; }
     if (!$('#g-phone').value) $('#g-phone').value = prev.phone;
     if (!document.querySelector('#g-days input:checked')) setDays(prev.days);
     $('#g-start').value = prev.start; $('#g-end').value = prev.end;
+    eState.slots = prev.slots ? JSON.parse(JSON.stringify(prev.slots)) : {};
     syncDur();
     updateEnrHints();
   }
@@ -1126,12 +1169,19 @@ body { margin: 0; }
     var same = eState.editing ? null : state.enrollments.find(function (e) { return e.dong === enr.dong && e.ho === enr.ho && e.month === enr.month; });
     if (same) {
       enr = Object.assign({}, same, { days: same.days.concat(form.days.filter(function (d) { return same.days.indexOf(d) < 0; })) });
+      // new weekdays keep the time typed in this form, even when the shared 신청서 has another default
+      var sl = Object.assign({}, same.slots);
+      form.days.forEach(function (d) {
+        var t = slotOf(form, d);
+        if (same.days.indexOf(d) < 0 && (t.start !== same.start || t.end !== same.end)) sl[d] = t;
+      });
+      if (Object.keys(sl).length) enr.slots = sl;
     }
     enr.id = eState.editing || (same ? same.id : newId());
     // editing days/time/period: redo this person's unsigned lessons from today on, signed ones stay
     var old = eState.editing ? state.enrollments.find(function (e) { return e.id === enr.id; }) : null;
-    var changed = !!old && [old.days.slice().sort().join(), old.start, old.end, old.periodStart, old.periodEnd].join('|') !==
-      [enr.days.slice().sort().join(), enr.start, enr.end, enr.periodStart, enr.periodEnd].join('|');
+    var changed = !!old && [old.days.slice().sort().join(), old.start, old.end, JSON.stringify(old.slots || {}), old.periodStart, old.periodEnd].join('|') !==
+      [enr.days.slice().sort().join(), enr.start, enr.end, JSON.stringify(enr.slots || {}), enr.periodStart, enr.periodEnd].join('|');
     var today = ymd(new Date());
     if (changed) {
       state.events = state.events.filter(function (x) {
@@ -1145,7 +1195,8 @@ body { margin: 0; }
     }) : [];
     putEnr(enr);
     dates.forEach(function (d) {
-      state.events.push({ id: newId(), title: person, date: d, start: form.start, end: form.end, memo: '', status: 'scheduled', enrollmentId: enr.id });
+      var t = slotOf(form, parse(d).getDay());
+      state.events.push({ id: newId(), title: person, date: d, start: t.start, end: t.end, memo: '', status: 'scheduled', enrollmentId: enr.id });
     });
     if (gen || changed) saveEvents();
     var d0 = parse(enr.month + '-01');
@@ -1186,7 +1237,7 @@ body { margin: 0; }
       '<p>▶▷ 강습에 대하여 다음 사항을 참조해 주시기 바랍니다.</p>' +
       '<p>1. 한 달 강습 등록 기간은 ' + fill(ps ? ps.getMonth() + 1 : '') + ' / ' + fill(ps ? ps.getDate() : '') + ' 부터 ' + fill(pe ? pe.getMonth() + 1 : '') + ' / ' + fill(pe ? pe.getDate() : '') + ' 까지 입니다.</p>' +
       '<p>2. 강습 요일은 ( ' + dayList + ' ) 이며, 총, ' + fill(enrCount(enr)) + ' 회 입니다.</p>' +
-      '<p>3. 강습 시간은 ' + fill(part(enr.start, 0)) + ' : ' + fill(part(enr.start, 1)) + ' ~ ' + fill(part(enr.end, 0)) + ' : ' + fill(part(enr.end, 1)) + ' 입니다.</p>' +
+      '<p>3. 강습 시간은 ' + (enr.slots && Object.keys(enr.slots).length ? fill(timeText(enr)) : fill(part(enr.start, 0)) + ' : ' + fill(part(enr.start, 1)) + ' ~ ' + fill(part(enr.end, 0)) + ' : ' + fill(part(enr.end, 1))) + ' 입니다.</p>' +
       '<p>4. 강습료는 월 ' + fill(fmt(enrFee(enr)), 'w') + '원 이며, 매달 관리비에</p>' +
       '<p class="i1">자동 부과 됩니다. (강습료는 후부과 처리 됩니다.)</p>' +
       '<p class="i1">※ 강사와 직접 현금거래로 인한 불이익은 당 스포츠센터는</p>' +
@@ -1214,7 +1265,7 @@ body { margin: 0; }
       '<table class="info">' +
       '<tr><th>성 명</th><td>' + esc(enr.name) + '</td><th>담 당</th><td>' + esc(state.settings.instructor) + '</td></tr>' +
       '<tr><th>동/호수</th><td>' + esc(enr.dong) + ' 동 &nbsp; ' + esc(enr.ho) + ' 호</td><th>강습/년월</th><td>' + y + ' 년 ' + m + ' 월</td></tr>' +
-      '<tr><th>전화번호</th><td>' + esc(enr.phone) + '</td><th>요일/시간</th><td>' + esc(dayText(enr, ',')) + ' / ' + esc(enr.start) + '~' + esc(enr.end) + '</td></tr>' +
+      '<tr><th>전화번호</th><td>' + esc(enr.phone) + '</td><th>요일/시간</th><td>' + esc(enr.slots && Object.keys(enr.slots).length ? timeText(enr) : dayText(enr, ',') + ' / ' + timeText(enr)) + '</td></tr>' +
       '</table>' +
       '<table class="rows"><tr><th class="n"></th><th>강습 날짜</th><th>강습 시간</th><th>회 원</th></tr>' + body + '</table>' +
       '</div>';
@@ -1316,6 +1367,10 @@ body { margin: 0; }
   $('#g-start').addEventListener('input', function () {
     var s = $('#g-start').value; if (!s) return;
     $('#g-end').value = fromMin(toMin(s) + eState.edur); updateEnrHints();
+  });
+  $('#g-slots').addEventListener('input', function (e) {
+    var row = e.target.closest('.slot'), s = row.querySelector('input').value; if (!s) return;
+    eState.slots[row.getAttribute('data-d')] = { start: s, end: fromMin(toMin(s) + Number(row.querySelector('select').value)) };
   });
   $('#g-dur').addEventListener('change', function (e) {
     eState.edur = Number(e.target.value);

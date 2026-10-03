@@ -22,7 +22,7 @@ The owner is learning to code (HTML/CSS basics, moving toward backend/AI enginee
 | Key | Content |
 | --- | --- |
 | `lesson-calendar-v1` | events: `{ id, title, date: "YYYY-MM-DD", start: "HH:MM", end: "HH:MM", memo, status: "scheduled" \| "done" \| "cancelled", enrollmentId? }` |
-| `lesson-calendar-enroll-v1` | enrollments: `{ id, month: "YYYY-MM", name, dong, ho, phone, periodStart, periodEnd, days: [0-6], count, start, end, fee, appliedOn }` |
+| `lesson-calendar-enroll-v1` | enrollments: `{ id, month: "YYYY-MM", name, dong, ho, phone, periodStart, periodEnd, days: [0-6], count, start, end, fee, appliedOn, slots? }` |
 | `lesson-calendar-settings-v1` | `{ instructor, label }` (printed on forms; defaults 김민기 / 오전헬스) |
 
 - `title` of an event is the member's name. Dates are local-time strings; never use `toISOString()` for dates.
@@ -31,6 +31,7 @@ The owner is learning to code (HTML/CSS basics, moving toward backend/AI enginee
 - 강습신청 현황 rows come from `enrOfMonth(key)`: sorted by 동 (A, B, C, ...) then 호수 numerically ascending (`cmpEnr`). 15 rows per page with a 소계 per page, plus 합계 on the last page when there is more than one page.
 - Count and fee are computed, not typed: count = the enrollment's lessons that the member signed (`status: "done"`, `enrCount`), fee = the sum over those lessons of 30,000 (30 min) or 50,000 (50 min) by each calendar lesson's own start/end (`unitFee`, `enrFee`). Lesson length is picked with the 수업 시간 buttons, which set `end`. The stored `count`/`fee` fields are legacy and ignored.
 - Backup file: `{ app: "lesson-calendar", version: 2, events, enrollments, settings }`. Import also accepts the old version 1 (events only) and merges by `id`. Keep new fields optional so old backups stay valid.
+- `slots` (optional on an enrollment): `{ "2": { start, end }, "3": { start, end } }`, keyed by weekday number. A weekday with a slot uses that time, every other weekday uses the enrollment's `start`/`end` (`slotOf`, `timeText`). Used when generating calendar lessons, redoing lessons on edit, copying last month and the printed 신청서/사인지. Missing `slots` = old data, everything uses `start`/`end`.
 
 ## The paper forms
 
