@@ -294,7 +294,21 @@ body { margin: 0; }
 .paper .rows .n { width: 12%; }
 .paper .rows td { padding: 0.5mm 2mm; }
 .paper .sig { display: block; margin: 0 auto; height: 8.6mm; width: auto; max-width: 100%; fill: none; stroke: #000; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.sbig { display: flex; flex-direction: column; gap: 10px; }
+.sname { font-size: 22px; font-weight: 700; margin: 0; overflow-wrap: anywhere; }
+.sask { font-size: 20px; line-height: 1.4; margin: 0; }
+.scard { display: grid; gap: 10px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); }
+.srow { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.srow span { font-size: 18px; font-weight: 600; color: var(--ink); }
+.srow b { font-size: 32px; font-weight: 700; line-height: 1.2; color: var(--accent); font-variant-numeric: tabular-nums; }
+.padbox { position: relative; }
+.padhint { position: absolute; inset: 0; display: grid; place-items: center; font-size: 20px; color: var(--ink-2); pointer-events: none; }
+.sactions { display: flex; flex-direction: column; gap: 18px; margin-top: 4px; }
+.sactions .btn { min-height: 56px; font-size: 18px; font-weight: 700; flex: none; width: 100%; }
+.ssec { display: flex; gap: 10px; }
+.ssec .btn { flex: 1; width: auto; }
 .signpad { width: 100%; aspect-ratio: 3 / 1; border: 1px dashed var(--ink-2); border-radius: 12px; background: var(--surface); color: var(--ink); touch-action: none; display: block; }
+@media (max-width: 599px) { .signpad { aspect-ratio: 2 / 1; } }
 .paper .stitle { margin: 4mm 0 6mm; text-align: center; font-size: 25px; font-weight: 500; }
 .paper .stitle u { display: inline-block; min-width: 3em; text-decoration: none; }
 .paper .srow { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 1.5mm; font-size: 14px; }
@@ -431,12 +445,17 @@ body { margin: 0; }
   <div class="panel" role="dialog" aria-modal="true" aria-labelledby="sign-title">
     <div class="grab"></div>
     <h2 id="sign-title">회원 사인</h2>
-    <p class="help" id="sign-who"></p>
-    <canvas class="signpad" id="signpad"></canvas>
-    <div class="actions">
-      <button type="button" class="btn" id="sign-cancel">닫기</button>
-      <button type="button" class="btn" id="sign-clear">지우기</button>
+    <div class="sbig" id="sign-who"></div>
+    <div class="padbox">
+      <canvas class="signpad" id="signpad"></canvas>
+      <span class="padhint" id="pad-hint">여기에 사인해 주세요</span>
+    </div>
+    <div class="sactions">
       <button type="button" class="btn primary" id="sign-ok">사인 완료</button>
+      <div class="ssec">
+        <button type="button" class="btn" id="sign-clear">지우기</button>
+        <button type="button" class="btn" id="sign-cancel">닫기</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1603,33 +1622,49 @@ body { margin: 0; }
   });
 
   /* ---------- member signature: strokes stored as a compact SVG path (SW x SH box), ~1 KB each ---------- */
-  var SW = 300, SH = 100, signEv = null, signEnrId = null, strokes = [], cv = null;
+  var SW = 300, SH = 100, PH = SH, signEv = null, signEnrId = null, strokes = [], cv = null;
   function validSign(v) { return typeof v === 'string' && v.length < 20000 && /^[ML0-9. -]+$/.test(v); }
-  function padXY(e) { var r = cv.getBoundingClientRect(); return [Math.round((e.clientX - r.left) / r.width * SW), Math.round((e.clientY - r.top) / r.height * SH)]; }
+  function padXY(e) { var r = cv.getBoundingClientRect(); return [Math.round((e.clientX - r.left) / r.width * SW), Math.round((e.clientY - r.top) / r.height * PH)]; }
   function padDraw() {
     var c = cv.getContext('2d'), k = cv.width / SW;
+    $('#pad-hint').hidden = strokes.length > 0;
     c.clearRect(0, 0, cv.width, cv.height);
     c.strokeStyle = getComputedStyle(cv).color; c.lineWidth = 2.4 * k; c.lineCap = c.lineJoin = 'round';
     strokes.forEach(function (s) { c.beginPath(); s.forEach(function (p, i) { if (i) c.lineTo(p[0] * k, p[1] * k); else c.moveTo(p[0] * k, p[1] * k); }); if (s.length === 1) c.lineTo(s[0][0] * k + 0.1, s[0][1] * k); c.stroke(); });
   }
   // Same pad for two jobs: signEv = a lesson signature, signEnrId = the monthly 강습 확인 signature of a 신청서
   function openPad() {
-    strokes = [];
     $('#signm').hidden = false; document.body.classList.add('locked');
-    cv.width = cv.clientWidth * 2; cv.height = cv.width * SH / SW; padDraw();
+    // the pad is taller than the stored 300x100 box on phones; strokes are fitted into the box on save
+    strokes = []; PH = SW * cv.clientHeight / cv.clientWidth;
+    cv.width = cv.clientWidth * 2; cv.height = cv.width * PH / SW; padDraw();
+  }
+  // Scale the strokes uniformly (no distortion) into the SW x SH box; unchanged when the pad already has that shape
+  function fitStrokes() {
+    if (PH <= SH + 0.5) return strokes;
+    var xs = [], ys = [];
+    strokes.forEach(function (st) { st.forEach(function (p) { xs.push(p[0]); ys.push(p[1]); }); });
+    var x0 = Math.min.apply(null, xs), y0 = Math.min.apply(null, ys);
+    var w = Math.max(Math.max.apply(null, xs) - x0, 1), h = Math.max(Math.max.apply(null, ys) - y0, 1);
+    var k = Math.min((SW - 8) / w, (SH - 8) / h, 2.5), ox = (SW - w * k) / 2 - x0 * k, oy = (SH - h * k) / 2 - y0 * k;
+    return strokes.map(function (st) { return st.map(function (p) { return [Math.round(p[0] * k + ox), Math.round(p[1] * k + oy)]; }); });
   }
   function openConfirmSign(enr) {
     signEv = null; signEnrId = enr.id;
     $('#sign-title').textContent = '강습 확인 사인';
-    $('#sign-who').textContent = enr.name + ' 회원님, ' + Number(enr.month.slice(5)) + '월 강습 ' + enrCount(enr) + '회 · 강습료 ' + fmt(enrFee(enr)) + '원을 확인했어요. 아래 칸에 사인해 주세요.';
+    $('#sign-who').innerHTML = '<p class="sname">' + esc(enr.name) + ' 회원님</p>' +
+      '<div class="scard"><div class="srow"><span>' + Number(enr.month.slice(5)) + '월 강습 횟수</span><b>' + enrCount(enr) + '회</b></div>' +
+      '<div class="srow"><span>강습료</span><b>' + fmt(enrFee(enr)) + '원</b></div></div>' +
+      '<p class="sask">위 내용이 맞으면 아래 칸에 사인해 주세요.</p>';
     openPad();
   }
   function openSign(ev) {
     signEv = ev; signEnrId = null; strokes = [];
     $('#sign-title').textContent = '회원 사인';
-    $('#sign-who').textContent = ev.title + ' 회원님, 아래 칸에 사인해 주세요.';
-    $('#signm').hidden = false; document.body.classList.add('locked');
-    cv.width = cv.clientWidth * 2; cv.height = cv.width * SH / SW; padDraw();
+    $('#sign-who').innerHTML = '<p class="sname">' + esc(ev.title) + ' 회원님</p>' +
+      '<p class="sask">' + esc(longDate(ev.date) + ' ' + ev.start + ' ~ ' + ev.end) + ' 수업</p>' +
+      '<p class="sask">아래 칸에 사인해 주세요.</p>';
+    openPad();
   }
   function closeSign() { $('#signm').hidden = true; document.body.classList.remove('locked'); signEv = null; signEnrId = null; }
   cv = $('#signpad');
@@ -1639,7 +1674,7 @@ body { margin: 0; }
   $('#sign-cancel').addEventListener('click', closeSign);
   $('#sign-ok').addEventListener('click', async function () {
     if (!strokes.length) { toast('먼저 사인해 주세요'); return; }
-    var d = strokes.map(function (s) { return 'M' + s[0].join(' ') + s.slice(1).map(function (p) { return 'L' + p.join(' '); }).join('') + (s.length === 1 ? 'L' + (s[0][0] + 1) + ' ' + s[0][1] : ''); }).join('');
+    var d = fitStrokes().map(function (s) { return 'M' + s[0].join(' ') + s.slice(1).map(function (p) { return 'L' + p.join(' '); }).join('') + (s.length === 1 ? 'L' + (s[0][0] + 1) + ' ' + s[0][1] : ''); }).join('');
     if (signEnrId) {
       var en = state.enrollments.find(function (x) { return x.id === signEnrId; }); closeSign();
       if (en) { putEnr(Object.assign({}, en, { confirm: d, confirmCount: enrCount(en), confirmFee: enrFee(en) })); toast('확인 사인을 받았어요'); }
