@@ -246,6 +246,15 @@ body { margin: 0; }
 .paper .sum .sig { height: 9mm; }
 .prt { flex: none; width: 56px; background: none; border: 0; border-left: 1px solid var(--line); display: grid; place-items: center; }
 .prt svg { width: 22px; height: 22px; stroke: var(--ink); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.selbar { position: fixed; z-index: 6; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 10px; padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px)); background: var(--surface); border-top: 1px solid var(--line); }
+.selbar .btn { flex: none; min-height: 48px; padding: 0 14px; }
+.selbar span { flex: 1; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; }
+.selecting .fab { display: none; }
+.selecting #enr-list { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+.selbox { flex: none; width: 28px; height: 28px; border: 2px solid var(--ink-2); border-radius: 8px; display: grid; place-items: center; font-size: 18px; line-height: 1; font-weight: 700; }
+.selbox.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.enr-main.pick { min-height: 56px; }
+#confm-text { white-space: pre-line; }
 .cph { margin: 8px 0 0; font-size: 15px; font-weight: 700; color: var(--ink); }
 .chk { display: flex; align-items: center; gap: 10px; min-height: 44px; font-weight: 500; }
 .chk input { width: 22px; height: 22px; accent-color: var(--accent); flex: none; }
@@ -365,6 +374,7 @@ body { margin: 0; }
     <div class="enr-actions">
       <button type="button" class="btn primary" id="btn-summary" style="flex:2">강습신청 현황 출력</button>
       <button type="button" class="btn" id="btn-copy" style="flex:1.3">지난달 신청 복사</button>
+      <button type="button" class="btn" id="btn-select" style="flex:0.8">선택</button>
     </div>
     <ul class="list" id="enr-list"></ul>
   </div>
@@ -426,6 +436,13 @@ body { margin: 0; }
     </div>
   </div>
 </div>
+
+<div class="selbar" id="selbar" hidden>
+  <button type="button" class="btn" id="sel-all">전체 선택</button>
+  <span id="sel-count">0건 선택</span>
+  <button type="button" class="btn danger" id="sel-del">삭제</button>
+</div>
+<div class="toast upd" id="undo" role="status" hidden><span id="undo-text"></span><button type="button" id="undo-btn">되돌리기</button></div>
 
 <div class="scrim" id="cpm" hidden>
   <div class="panel" role="dialog" aria-modal="true" aria-labelledby="cpm-title">
@@ -1259,6 +1276,10 @@ body { margin: 0; }
   var PRINTER = '<svg viewBox="0 0 24 24"><path d="M7 9V4h10v5M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"/><rect x="7" y="14" width="10" height="6" rx="1"/></svg>';
   function renderEnr() {
     var key = monthKey(state.month), list = enrOfMonth(key), m = Number(key.slice(5));
+    // selection ends when the tab or month changes, or nothing is left to select
+    if (sel.on && (state.tab !== 'enr' || key !== sel.key || !list.length)) { sel.on = false; sel.ids = {}; }
+    document.body.classList.toggle('selecting', sel.on);
+    $('#selbar').hidden = !sel.on; $('#btn-select').textContent = sel.on ? '완료' : '선택'; $('#btn-select').disabled = !list.length && !sel.on;
     var cnt = list.reduce(function (s, e) { return s + enrCount(e); }, 0);
     var fee = list.reduce(function (s, e) { return s + enrFee(e); }, 0);
     $('#enr-sum').textContent = list.length ? m + '월 신청 ' + list.length + '명 · 총 ' + cnt + '회 · ' + fmt(fee) + '원' : m + '월 신청서가 아직 없어요';
@@ -1269,6 +1290,10 @@ body { margin: 0; }
     }
     $('#enr-list').innerHTML = list.map(function (e) {
       var meta = [dayText(e, '·') || '요일 미정', timeText(e), enrCount(e) + '회', fmt(enrFee(e)) + '원'].join(' · ');
+      if (sel.on) return '<li class="enr hh" style="' + hh(householdKey(e)) + '"><span class="bar"></span>' +
+        '<button type="button" class="enr-main pick" data-esel="' + esc(e.id) + '"><span class="selbox" data-selbox="' + esc(e.id) + '"></span>' +
+          '<span class="unit">' + esc(e.dong) + '동<small>' + esc(e.ho) + '호</small></span>' +
+          '<span class="who"><b>' + esc(e.name) + '</b><em>' + esc(meta) + '</em></span></button></li>';
       return '<li class="enr hh" style="' + hh(householdKey(e)) + '"><span class="bar"></span>' +
         '<button type="button" class="enr-main" data-eedit="' + esc(e.id) + '">' +
           '<span class="unit">' + esc(e.dong) + '동<small>' + esc(e.ho) + '호</small></span>' +
@@ -1279,7 +1304,72 @@ body { margin: 0; }
         '<button type="button" class="prt" data-eprint="' + esc(e.id) + '" aria-label="' + esc(e.name) + ' 신청서와 사인지 출력">' + PRINTER + '</button>' +
       '</li>';
     }).join('');
+    updateSelUI();
   }
+  // selection mode: sel.ids holds the chosen enrollment ids
+  var sel = { on: false, ids: {}, key: '' };
+  function updateSelUI() {
+    if (!sel.on) return;
+    document.querySelectorAll('[data-selbox]').forEach(function (b) {
+      var on = !!sel.ids[b.getAttribute('data-selbox')];
+      b.classList.toggle('on', on); b.textContent = on ? '✓' : '';
+      b.parentNode.setAttribute('aria-pressed', String(on));
+    });
+    var n = Object.keys(sel.ids).length, total = enrOfMonth(sel.key).length;
+    $('#sel-count').textContent = n + '건 선택';
+    $('#sel-del').disabled = !n;
+    $('#sel-all').textContent = n && n === total ? '선택 해제' : '전체 선택';
+  }
+  // What deleting these enrollments removes: the 신청서, their unsigned (scheduled) lessons, never signed ones.
+  // Lessons without enrollmentId count only when exactly one enrollment of that name and month could own them.
+  function planDelete(ids) {
+    var enrs = state.enrollments.filter(function (e) { return ids.indexOf(e.id) >= 0; }), evIds = {}, signed = 0, sealed = false;
+    enrs.forEach(function (enr) {
+      var unique = state.enrollments.filter(function (e) { return e.month === enr.month && e.name === enr.name; }).length === 1;
+      lessonsFor(enr).forEach(function (l) {
+        if (l.status === 'done') signed++;
+        else if (l.status === 'scheduled' && (l.enrollmentId || unique)) evIds[l.id] = 1;
+      });
+      if (validSign(enr.confirm)) sealed = true;
+    });
+    return { enrs: enrs, evIds: evIds, signed: signed, sealed: sealed || signed > 0 };
+  }
+  // Remove the planned items in one go; the undo bar keeps them in memory only
+  var undoData = null, undoTimer = null;
+  function applyDelete(plan) {
+    var gone = state.events.filter(function (e) { return plan.evIds[e.id]; });
+    state.enrollments = state.enrollments.filter(function (e) { return plan.enrs.indexOf(e) < 0; });
+    state.events = state.events.filter(function (e) { return !plan.evIds[e.id]; });
+    saveEnr(); saveEvents(); render();
+    undoData = { enrs: plan.enrs, evs: gone };
+    $('#undo-text').textContent = plan.enrs.length + '건을 삭제했어요';
+    $('#undo').hidden = false;
+    clearTimeout(undoTimer); undoTimer = setTimeout(function () { $('#undo').hidden = true; undoData = null; }, 10000);
+  }
+  $('#undo-btn').addEventListener('click', function () {
+    if (!undoData) return;
+    var d = undoData; undoData = null; $('#undo').hidden = true; clearTimeout(undoTimer);
+    d.enrs.forEach(function (e) { if (!state.enrollments.some(function (x) { return x.id === e.id; })) state.enrollments.push(e); });
+    d.evs.forEach(function (e) { if (!state.events.some(function (x) { return x.id === e.id; })) state.events.push(e); });
+    saveEnr(); saveEvents(); render(); toast(d.enrs.length + '건을 되돌렸어요');
+  });
+  async function deleteSelected() {
+    var ids = Object.keys(sel.ids), plan = planDelete(ids);
+    if (!plan.enrs.length) return;
+    var names = plan.enrs.map(function (e) { return e.name; }), shown = names.slice(0, 5).join(', ') + (names.length > 5 ? ' 외 ' + (names.length - 5) + '명' : '');
+    var text = shown + '\n선택한 신청서 ' + plan.enrs.length + '건과 서명 전 수업 ' + Object.keys(plan.evIds).length + '개가 삭제돼요. 서명한 수업 ' + plan.signed + '개는 남아요.' +
+      (plan.sealed ? '\n서명 기록이 있는 신청서가 포함돼 있어요. 삭제하면 해당 월 신청서·현황을 다시 출력할 수 없어요.' : '');
+    if (!await ask('신청서 삭제', text, plan.sealed ? '서명 기록 포함 삭제' : '삭제')) return;
+    sel.on = false; sel.ids = {};
+    applyDelete(plan);
+  }
+  $('#btn-select').addEventListener('click', function () { sel.on = !sel.on; sel.ids = {}; sel.key = monthKey(state.month); render(); });
+  $('#sel-all').addEventListener('click', function () {
+    var list = enrOfMonth(sel.key), all = Object.keys(sel.ids).length === list.length;
+    sel.ids = {}; if (!all) list.forEach(function (e) { sel.ids[e.id] = 1; });
+    updateSelUI();
+  });
+  $('#sel-del').addEventListener('click', deleteSelected);
 
   /* ---- enrollment sheet ---- */
   var eState = { editing: null, periodDirty: false, edur: 50, slots: {} };
@@ -1442,10 +1532,8 @@ body { margin: 0; }
   }
   async function removeEnr() {
     if (!await ask('신청서 삭제', $('#g-name').value.trim() + ' 신청서를 삭제할까요? 서명 전 연결 수업도 달력에서 함께 지워져요.', '삭제')) return;
-    var id = eState.editing;
-    state.enrollments = state.enrollments.filter(function (e) { return e.id !== id; });
-    state.events = state.events.filter(function (e) { return !(e.enrollmentId === id && e.status === 'scheduled'); });
-    saveEnr(); saveEvents(); closeEnr(); render(); toast('삭제했어요');
+    var plan = planDelete([eState.editing]);
+    closeEnr(); applyDelete(plan);
   }
   // Picker: households of last month (checked) and households that rested up to 12 months (unchecked); the newest 신청서 of each is the source
   var cpSources = [];
@@ -1615,6 +1703,8 @@ body { margin: 0; }
   });
   $('#btn-copy').addEventListener('click', copyLastMonth);
   $('#enr-list').addEventListener('click', async function (e) {
+    var pk = e.target.closest('[data-esel]');
+    if (pk) { var pid = pk.getAttribute('data-esel'); if (sel.ids[pid]) delete sel.ids[pid]; else sel.ids[pid] = 1; updateSelUI(); return; }
     var cs = e.target.closest('[data-econfirm]');
     if (cs) {
       var ce = state.enrollments.find(function (x) { return x.id === cs.getAttribute('data-econfirm'); });
