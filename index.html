@@ -628,6 +628,7 @@ body { margin: 0; }
       if (typeof s.label === 'string') state.settings.label = s.label;
     }
     try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
+    syncAllEnrollments();
     render();
     cloudStart();
   }
@@ -670,6 +671,7 @@ body { margin: 0; }
     state.events = (data.events || []).filter(validEvent);
     state.enrollments = (data.enrollments || []).filter(validEnr).map(cleanEnr);
     if (data.settings) { state.settings.instructor = data.settings.instructor || state.settings.instructor; state.settings.label = data.settings.label || state.settings.label; }
+    syncAllEnrollments(true);
     lsSave(); saveEnr(); saveSettings(); render();
   }
   function byId(list) { var m = {}; list.forEach(function (x) { m[x.id] = x; }); return m; }
@@ -1088,11 +1090,15 @@ body { margin: 0; }
   }
   // The calendar is the source of truth: days, time and period of a 신청서 follow its lessons.
   // Upcoming unsigned lessons win; without any, all lessons count. Saves only when something changed.
-  function syncEnrFromLessons(id) {
-    var enr = id && state.enrollments.find(function (e) { return e.id === id; });
-    if (!enr) return false;
-    var all = lessonsFor(enr);
-    if (!all.length) return false;
+  // Lessons used for syncing: linked ones, plus unlinked ones only when no other enrollment of that month has the same name
+  function syncLessons(enr) {
+    var same = state.enrollments.filter(function (e) { return e.month === enr.month && e.name === enr.name; }).length;
+    return lessonsFor(enr).filter(function (l) { return l.enrollmentId || same === 1; });
+  }
+  // Returns the synced copy of enr, or null when nothing changes
+  function syncedEnr(enr) {
+    var all = syncLessons(enr);
+    if (!all.length) return null;
     var today = ymd(new Date());
     var up = all.filter(function (l) { return l.status === 'scheduled' && l.date >= today; });
     var src = up.length ? up : all, first = {};
@@ -1108,10 +1114,27 @@ body { margin: 0; }
     if (n) next.slots = slots; else delete next.slots;
     if (inMonth.length) { next.periodStart = inMonth[0].date; next.periodEnd = inMonth[inMonth.length - 1].date; }
     var key = function (e) { return JSON.stringify([e.days, e.start, e.end, e.slots || null, e.periodStart, e.periodEnd]); };
-    if (key(next) === key(enr)) return false;
+    return key(next) === key(enr) ? null : next;
+  }
+  function syncEnrFromLessons(id) {
+    var enr = id && state.enrollments.find(function (e) { return e.id === id; });
+    var next = enr && syncedEnr(enr);
+    if (!next) return false;
     state.enrollments[state.enrollments.indexOf(enr)] = next;
     saveEnr();
     return true;
+  }
+  // Run for every enrollment (startup, import, cloud pull). In memory first, one save, idempotent.
+  // noSave: the caller saves right after. Keeps a one-time copy of the enrollments before the first automatic change.
+  var LS_PRE = 'lesson-calendar-enroll-backup-pre-sync';
+  function syncAllEnrollments(noSave) {
+    var n = 0, next = state.enrollments.map(function (e) { var x = syncedEnr(e); if (x) n++; return x || e; });
+    if (!n) return 0;
+    try { if (!localStorage.getItem(LS_PRE)) localStorage.setItem(LS_PRE, JSON.stringify(state.enrollments)); } catch (e) {}
+    state.enrollments = next;
+    if (!noSave) saveEnr();
+    toast('신청서 ' + n + '건을 달력 기준으로 맞췄어요');
+    return n;
   }
   // Printed 신청서 shows one weekday and time: the weekday with most lessons (tie: earliest lesson), its most common time (tie: earliest)
   function repDay(enr) {
@@ -1596,6 +1619,7 @@ body { margin: 0; }
         if (typeof data.settings.label === 'string') state.settings.label = data.settings.label;
         saveSettings();
       }
+      syncAllEnrollments(true);
       lsSave(); saveEnr(); render();
       $('#backup-count').textContent = '저장된 수업 ' + state.events.length + '개 · 신청서 ' + state.enrollments.length + '건';
       $('#s-inst').value = state.settings.instructor; $('#s-label').value = state.settings.label;
