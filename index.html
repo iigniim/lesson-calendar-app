@@ -387,6 +387,19 @@ body { margin: 0; }
   </form>
 </div>
 
+<div class="scrim" id="editm" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="editm-title">
+    <div class="grab"></div>
+    <h2 id="editm-title">수업 시간 변경</h2>
+    <p id="editm-text"></p>
+    <div class="actions" style="flex-direction:column">
+      <button type="button" class="btn primary" id="editm-one">이 수업만 변경</button>
+      <button type="button" class="btn primary" id="editm-after">이 수업과 이후 같은 요일 수업 모두 변경</button>
+      <button type="button" class="btn" id="editm-cancel">취소</button>
+    </div>
+  </div>
+</div>
+
 <div class="scrim" id="delm" hidden>
   <div class="panel" role="dialog" aria-modal="true" aria-labelledby="delm-title">
     <div class="grab"></div>
@@ -841,8 +854,27 @@ body { margin: 0; }
         var upd = { id: state.editing, title: title, date: date, start: start, end: end, memo: memo, status: st };
         if (old.enrollmentId) upd.enrollmentId = old.enrollmentId;
         if (old.sign && st === 'done') upd.sign = old.sign;
-        await put(upd);
-        toast('수정했어요');
+        var after = [];
+        if (old.id && (old.start !== start || old.end !== end)) {
+          // later lessons on the same weekday, still unsigned
+          var wd = parse(old.date).getDay();
+          after = lessonsFrom(old).filter(function (x) { return x.id !== old.id && x.status === 'scheduled' && parse(x.date).getDay() === wd; });
+          var choice = await askTimeChange(old, start, end, after.length + 1);
+          if (!choice) { $('#btn-save').disabled = false; return; }
+          if (choice === 'one') after = [];
+          else {
+            after.forEach(function (x) { x.start = start; x.end = end; });
+            var enrChanged = syncEnrTime(old, wd, start, end);
+          }
+        }
+        if (after.length) {
+          state.events[state.events.findIndex(function (x) { return x.id === upd.id; })] = upd;
+          lsSave(); if (enrChanged) saveEnr();
+          toast((after.length + 1) + '개 수업 시간을 바꿨어요');
+        } else {
+          await put(upd);
+          toast('수정했어요');
+        }
       } else {
         var step = Number($('#f-repeat').value);
         var n = step ? Math.min(52, Math.max(2, Number($('#f-count').value) || 2)) : 1;
@@ -862,6 +894,29 @@ body { margin: 0; }
     }
   }
 
+  // Resolves 'one', 'after' or null (cancel); n counts this lesson plus the following ones
+  function askTimeChange(old, start, end, n) {
+    $('#editm-text').textContent = longDate(old.date) + ' ' + old.title + ' 수업을 ' + old.start + '~' + old.end + ' → ' + start + '~' + end + '로 바꿀까요?';
+    $('#editm-after').hidden = n < 2;
+    $('#editm-after').textContent = '이 수업과 이후 같은 요일 수업 모두 변경 (' + n + '개)';
+    $('#editm').hidden = false;
+    return new Promise(function (resolve) {
+      function done(v) { $('#editm').hidden = true; $('#editm').onclick = $('#editm-one').onclick = $('#editm-after').onclick = $('#editm-cancel').onclick = null; resolve(v); }
+      $('#editm-one').onclick = function () { done('one'); };
+      $('#editm-after').onclick = function () { done('after'); };
+      $('#editm-cancel').onclick = function () { done(null); };
+      $('#editm').onclick = function (e) { if (e.target === $('#editm')) done(null); };
+    });
+  }
+  // Keep the 신청서 time in step so editing it later does not bring the old time back; true if changed
+  function syncEnrTime(ev, wd, start, end) {
+    var enr = state.enrollments.find(function (e) { return e.id === ev.enrollmentId; });
+    if (!enr) return false;
+    if (enr.slots) enr.slots[wd] = { start: start, end: end };
+    else if (enr.days.length === 1) { enr.start = start; enr.end = end; }
+    else return false;
+    return true;
+  }
   // Delete-style popup for every destructive action: resolves true (ok) or false (cancel)
   function ask(title, text, okLabel) {
     $('#confm-title').textContent = title; $('#confm-text').textContent = text; $('#confm-yes').textContent = okLabel;
@@ -938,7 +993,7 @@ body { margin: 0; }
   $('#add').addEventListener('click', function () { openEnr(null, state.tab === 'enr' ? null : state.selected); });
   $('#btn-close').addEventListener('click', closeSheet);
   $('#sheet').addEventListener('click', function (e) { if (e.target === $('#sheet')) closeSheet(); });
-  document.addEventListener('keydown', function (e) { if (e.key !== 'Escape') return; if (!$('#confm').hidden) $('#confm-no').click(); else if (!$('#delm').hidden) $('#delm').hidden = true; else if (!$('#sheet').hidden) closeSheet(); });
+  document.addEventListener('keydown', function (e) { if (e.key !== 'Escape') return; if (!$('#confm').hidden) $('#confm-no').click(); else if (!$('#editm').hidden) $('#editm-cancel').click(); else if (!$('#delm').hidden) $('#delm').hidden = true; else if (!$('#sheet').hidden) closeSheet(); });
   $('#form').addEventListener('submit', saveForm);
   $('#btn-del').addEventListener('click', removeCurrent);
   $('#f-repeat').addEventListener('change', function () { $('#count-box').hidden = $('#f-repeat').value === '0'; });
