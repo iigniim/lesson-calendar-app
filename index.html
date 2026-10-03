@@ -407,10 +407,11 @@ body { margin: 0; }
     <div class="grab"></div>
     <h2 id="delm-title">수업 삭제</h2>
     <p id="delm-text"></p>
+    <p class="help" id="delm-help"></p>
     <div class="actions" style="flex-direction:column">
       <button type="button" class="btn danger" id="delm-one">이 수업만 삭제</button>
-      <button type="button" class="btn danger" id="delm-week">이후 같은 요일 수업 삭제</button>
-      <button type="button" class="btn danger" id="delm-after">이후 수업 모두 삭제</button>
+      <button type="button" class="btn danger" id="delm-week"></button>
+      <button type="button" class="btn danger" id="delm-after"></button>
       <button type="button" class="btn" id="delm-cancel">취소</button>
     </div>
   </div>
@@ -863,7 +864,7 @@ body { margin: 0; }
         if (old.id && (old.start !== start || old.end !== end)) {
           // later lessons on the same weekday, still unsigned
           var wd = parse(old.date).getDay();
-          after = lessonsFrom(old).filter(function (x) { return x.id !== old.id && x.status === 'scheduled' && parse(x.date).getDay() === wd; });
+          after = lessonsFrom(old, { sameWeekday: true }).filter(function (x) { return x.id !== old.id && x.status === 'scheduled'; });
           var choice = await askTimeChange(old, start, end, after.length + 1);
           if (!choice) { $('#btn-save').disabled = false; return; }
           if (choice === 'one') after = [];
@@ -902,8 +903,8 @@ body { margin: 0; }
   // Resolves 'one', 'after' or null (cancel); n counts this lesson plus the following ones
   function askTimeChange(old, start, end, n) {
     $('#editm-text').textContent = longDate(old.date) + ' ' + old.title + ' 수업을 ' + old.start + '~' + old.end + ' → ' + start + '~' + end + '로 바꿀까요?';
-    $('#editm-after').hidden = n < 2;
-    $('#editm-after').textContent = '이후 같은 요일 수업 변경 (' + n + '개)';
+    $('#editm-after').disabled = n < 2;
+    $('#editm-after').textContent = '이후 같은 요일(' + dowLetter(old.date) + ') 수업 변경 (' + n + '개)';
     $('#editm').hidden = false;
     return new Promise(function (resolve) {
       function done(v) { $('#editm').hidden = true; $('#editm').onclick = $('#editm-one').onclick = $('#editm-after').onclick = $('#editm-cancel').onclick = null; resolve(v); }
@@ -932,27 +933,37 @@ body { margin: 0; }
       $('#confm-no').onclick = function () { done(false); };
     });
   }
-  // Same member's lessons on or after this one (same enrollment, or same name when there is none).
-  // Signed (done) lessons are skipped; opts.sameWeekday keeps only ev's weekday. ev itself is always included.
+  // Same member = same name, and the same enrollment, or enrollments with the same 동+호 (registered separately), or a lesson without an enrollment
+  function sameMember(a, b) {
+    if (a.title !== b.title) return false;
+    if (!a.enrollmentId || !b.enrollmentId || a.enrollmentId === b.enrollmentId) return true;
+    var ea = state.enrollments.find(function (e) { return e.id === a.enrollmentId; });
+    var eb = state.enrollments.find(function (e) { return e.id === b.enrollmentId; });
+    return !!ea && !!eb && ea.dong === eb.dong && ea.ho === eb.ho;
+  }
+  // Same member's lessons on or after this one. Signed (done) lessons are skipped;
+  // opts.sameWeekday keeps only ev's weekday. ev itself is always included.
   function lessonsFrom(ev, opts) {
     var wd = parse(ev.date).getDay();
     return state.events.filter(function (x) {
       if (x.id === ev.id) return true;
       if (x.status === 'done' || x.date < ev.date) return false;
       if (opts && opts.sameWeekday && parse(x.date).getDay() !== wd) return false;
-      return ev.enrollmentId ? x.enrollmentId === ev.enrollmentId : !x.enrollmentId && x.title === ev.title;
+      return sameMember(ev, x);
     });
   }
+  function dowLetter(date) { return '일월화수목금토'.charAt(parse(date).getDay()); }
   function removeCurrent() {
     var ev = state.events.find(function (x) { return x.id === state.editing; });
     if (!ev) return;
     var n = lessonsFrom(ev, { sameWeekday: true }).length, m = lessonsFrom(ev).length;
     $('#delm-text').textContent = longDate(ev.date) + ' ' + ev.title + ' 수업을 삭제할까요?';
-    // a choice that would delete the same lessons as another one is hidden
-    $('#delm-week').hidden = n < 2 || n === m;
-    $('#delm-week').textContent = '이후 같은 요일 수업 삭제 (' + n + '개)';
-    $('#delm-after').hidden = m < 2;
+    $('#delm-help').textContent = '같은 회원의 이후 수업: 같은 요일 ' + n + '개, 전체 ' + m + '개 (서명한 수업 제외)';
+    // always shown; a choice that would only delete this lesson is disabled
+    $('#delm-week').textContent = '이후 같은 요일(' + dowLetter(ev.date) + ') 수업 삭제 (' + n + '개)';
+    $('#delm-week').disabled = n < 2;
     $('#delm-after').textContent = '이후 수업 모두 삭제 (' + m + '개)';
+    $('#delm-after').disabled = m < 2;
     $('#delm').hidden = false;
   }
   async function deleteLessons(ids) {
