@@ -246,6 +246,7 @@ body { margin: 0; }
 .paper .sum .sig { height: 9mm; }
 .prt { flex: none; width: 56px; background: none; border: 0; border-left: 1px solid var(--line); display: grid; place-items: center; }
 .prt svg { width: 22px; height: 22px; stroke: var(--ink); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.cph { margin: 8px 0 0; font-size: 15px; font-weight: 700; color: var(--ink); }
 .chk { display: flex; align-items: center; gap: 10px; min-height: 44px; font-weight: 500; }
 .chk input { width: 22px; height: 22px; accent-color: var(--accent); flex: none; }
 
@@ -422,6 +423,18 @@ body { margin: 0; }
       <button type="button" class="btn primary" id="editm-one">이 수업만 변경</button>
       <button type="button" class="btn primary" id="editm-after">이후 같은 요일 수업 변경</button>
       <button type="button" class="btn" id="editm-cancel">취소</button>
+    </div>
+  </div>
+</div>
+
+<div class="scrim" id="cpm" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="cpm-title">
+    <div class="grab"></div>
+    <h2 id="cpm-title">지난 신청 복사</h2>
+    <div id="cpm-list"></div>
+    <div class="actions">
+      <button type="button" class="btn" id="cpm-cancel">취소</button>
+      <button type="button" class="btn primary" id="cpm-ok">복사</button>
     </div>
   </div>
 </div>
@@ -1434,18 +1447,55 @@ body { margin: 0; }
     state.events = state.events.filter(function (e) { return !(e.enrollmentId === id && e.status === 'scheduled'); });
     saveEnr(); saveEvents(); closeEnr(); render(); toast('삭제했어요');
   }
+  // Picker: households of last month (checked) and households that rested up to 12 months (unchecked); the newest 신청서 of each is the source
+  var cpSources = [];
   function copyLastMonth() {
-    var key = monthKey(state.month), prev = shiftKey(key, -1), b = monthBounds(key);
-    var prevList = enrOfMonth(prev);
-    var have = enrOfMonth(key).map(function (e) { return e.name + '|' + e.dong + '|' + e.ho; });
-    var src = prevList.filter(function (e) { return have.indexOf(e.name + '|' + e.dong + '|' + e.ho) < 0; });
-    if (!src.length) { toast(prevList.length ? '지난달 신청서는 이미 모두 복사돼 있어요' : '지난달 신청서가 없어요'); return; }
-    src.forEach(function (e) {
-      state.enrollments.push(Object.assign({}, e, { id: newId(), month: key, periodStart: b[0], periodEnd: b[1], confirm: undefined, confirmCount: undefined, confirmFee: undefined }));
+    var key = monthKey(state.month), prev = shiftKey(key, -1), oldest = shiftKey(key, -12);
+    var have = {}, latest = {};
+    state.enrollments.forEach(function (e) {
+      var k = householdKey(e);
+      if (e.month === key) have[k] = 1;
+      else if (e.month < key && e.month >= oldest && (!latest[k] || e.month > latest[k].month)) latest[k] = e;
     });
-    saveEnr(); render();
-    toast(src.length + '건을 복사했어요. 요일과 횟수를 확인해 주세요');
+    var rows = Object.keys(latest).filter(function (k) { return !have[k]; }).map(function (k) { return latest[k]; }).sort(cmpEnr);
+    if (!rows.length) { toast(enrOfMonth(prev).length ? '지난달 신청서는 이미 모두 복사돼 있어요' : '지난달 신청서가 없어요'); return; }
+    cpSources = rows;
+    var group = function (title, list, on) {
+      return list.length ? '<p class="cph">' + esc(title) + '</p>' + list.map(function (e) {
+        return '<label class="chk"><input type="checkbox" value="' + esc(e.id) + '"' + (on ? ' checked' : '') + '><span>' + esc(e.dong) + '동 ' + esc(e.ho) + '호 · ' + esc(e.name) +
+          (on ? '' : ' (최근 ' + Number(e.month.slice(5)) + '월)') + '</span></label>';
+      }).join('') : '';
+    };
+    var lastM = rows.filter(function (e) { return e.month === prev; });
+    $('#cpm-list').innerHTML = group('지난달 수강', lastM, true) + group('쉬었던 회원', rows.filter(function (e) { return e.month !== prev; }), false);
+    cpCount();
+    $('#cpm').hidden = false;
   }
+  function cpCount() {
+    var n = document.querySelectorAll('#cpm-list input:checked').length;
+    $('#cpm-ok').textContent = '선택한 ' + n + '건 복사'; $('#cpm-ok').disabled = !n;
+  }
+  function closeCopy() { $('#cpm').hidden = true; }
+  function doCopy() {
+    var key = monthKey(state.month), b = monthBounds(key), ids = [];
+    document.querySelectorAll('#cpm-list input:checked').forEach(function (i) { ids.push(i.value); });
+    var n = 0;
+    cpSources.forEach(function (e) {
+      if (ids.indexOf(e.id) < 0) return;
+      if (state.enrollments.some(function (x) { return x.month === key && householdKey(x) === householdKey(e); })) return;
+      state.enrollments.push(Object.assign({}, e, { id: newId(), month: key, periodStart: b[0], periodEnd: b[1], confirm: undefined, confirmCount: undefined, confirmFee: undefined }));
+      n++;
+    });
+    closeCopy();
+    if (!n) return;
+    saveEnr(); render();
+    toast(n + '건을 복사했어요. 요일과 횟수를 확인해 주세요');
+  }
+  $('#cpm-list').addEventListener('change', cpCount);
+  $('#cpm-cancel').addEventListener('click', closeCopy);
+  $('#cpm-ok').addEventListener('click', doCopy);
+  $('#cpm').addEventListener('click', function (e) { if (e.target === $('#cpm')) closeCopy(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$('#cpm').hidden) closeCopy(); });
 
   /* ---------- print layouts ---------- */
   function fill(v, cls) { return '<span class="fill' + (cls ? ' ' + cls : '') + '">' + esc(v) + '</span>'; }
