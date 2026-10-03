@@ -38,6 +38,17 @@ The owner is learning to code (HTML/CSS basics, moving toward backend/AI enginee
 The two forms come from the owner's workplace (Acrovista Sports Community): 신청서 + 선생님 보관용 on one landscape A4, and the monthly 종목별 입주민 강습신청 현황 on portrait A4. The original scans are photos, so the layouts are redrawn in HTML/CSS. If the owner changes a form, edit `signLeft`, `signRight`, `summaryPages` and the `.paper` CSS, then check the result as a PDF (Playwright `page.pdf` with `prefer_css_page_size`) to confirm the page count.
 The 회원 column of the 선생님 보관용 table shows the member's signature. Marking a lesson done is done by the member signing on the phone (event field `sign`, an SVG path string in a 300x100 box, optional); there is no plain done button. The left form (`signLeft`) follows the owner's original `신청서.pdf`: uniform ~10mm line pitch, continuation lines indented.
 
+## Workflow (deploy on every change)
+
+1. Before pushing: run `node --check` on the extracted inline script and the headless test for the touched feature if one exists. If anything fails, fix it or stop. Never push a failing build. If the Playwright setup hangs, skip it, say so, and give the owner a short manual test checklist in Korean.
+2. Bump `CACHE` in `sw.js` when app files changed.
+3. `git add` only the files changed for this task. Never `git add .`. Never stage member data, backup `*.json`, `.env` or secrets.
+4. One commit per request with a short imperative message, then `git push origin main`.
+5. Finish in Korean: 2-3 lines on what changed, the commit hash, and "앱을 완전히 닫았다 다시 열면 새 버전이에요".
+6. If a change touches the data model, backup format or sync, tell the owner to export a backup first and ask for confirmation before pushing.
+7. If the owner says "푸시하지 마" or "테스트만", do not commit or push.
+8. To undo a bad deploy use `git revert <hash>` and push. Never force-push.
+
 ## Service worker
 
 Bump `CACHE` in `sw.js` on every deploy that changes app files, or installed phones keep the old version.
