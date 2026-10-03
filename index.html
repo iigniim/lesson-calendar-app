@@ -1254,7 +1254,7 @@ body { margin: 0; }
     var tmp = readEnr(), ds = genDates(tmp), note = $('#g-gen-note');
     if (!tmp.days.length) note.textContent = '요일을 고르면 달력에 넣을 날짜를 미리 보여 드려요.';
     else if (!ds.length) note.textContent = '등록 기간 안에 고른 요일이 없어요.';
-    else note.textContent = ds.length + '회: ' + ds.map(mdLabel).join(', ');
+    else note.textContent = ds.length + '회 (' + mdLabel(ds[0]) + ' ~ ' + mdLabel(ds[ds.length - 1]) + ')';
   }
   // date (optional): opened from the calendar, so start with that day's month and weekday
   function openEnr(enr, date) {
@@ -1282,8 +1282,8 @@ body { margin: 0; }
     $('#g-gen').checked = true;
     $('#g-lessons-box').hidden = !lessons.length;
     if (lessons.length) {
-      $('#g-lessons').textContent = '달력에 있는 수업 ' + lessons.length + '회: ' + lessons.map(function (l) { return mdLabel(l.date) + ' ' + l.start; }).join(', ') +
-        '. 요일이나 시간을 바꿔 저장하면 서명 안 된 오늘 이후 수업이 새 요일·시간으로 바뀌어요. 서명한 수업은 그대로예요.';
+      $('#g-lessons').innerHTML = '달력에 수업 ' + lessons.length + '회 (첫 수업 ' + mdLabel(lessons[0].date) + ' ~ 마지막 수업 ' + mdLabel(lessons[lessons.length - 1].date) + ')<br>' +
+        '요일·시간을 바꿔 저장하면 서명 안 된 오늘 이후 수업이 바뀌어요. 서명한 수업은 그대로예요.';
     }
     $('#btn-edel').hidden = !enr;
     $('#g-del-help').hidden = !enr;
