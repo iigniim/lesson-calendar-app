@@ -1268,6 +1268,7 @@ body { margin: 0; }
   ['pointercancel', 'pointermove'].forEach(function (n) { $('#week').addEventListener(n, function (e) { if (n === 'pointercancel' || e.pointerType === 'touch') wkHitClear(); }); });
   /* ---------- drag-and-move a lesson block: long-press, then drag (Pointer Events, no HTML5 DnD) ---------- */
   var WK_HOLD = 350, WK_HOLD_MOUSE = 250, WK_SLOP = 8;   // ms to hold (touch / mouse), px of allowed wobble
+  var WK_EDGE = 48, WK_SCROLL_MAX = 12;                 // auto-scroll zone (px) and top speed (px per frame)
   var wkPress = null;       // pending long-press: { el, x, y, pid, type, timer }
   var wkDrag = null;        // active drag: { el, fl, id, pid, gx, gy, cx, cy, raf }
   var wkDragged = false;    // a drag happened in this gesture: no swipe, no click
@@ -1324,6 +1325,14 @@ body { margin: 0; }
     if (!wkDrag) return;
     wkDrag.raf = 0;
     var d = wkDrag, tx = d.cx - d.gx, ty = d.cy - d.gy;
+    // auto-scroll when the finger is within 48px of the top (below the sticky header) or the bottom of the grid
+    var box = $('#wk-scroll'), head = box.querySelector('.wk-head'), speed = 0;
+    if (head) {
+      var top = head.getBoundingClientRect().bottom, bottom = box.getBoundingClientRect().bottom;
+      if (d.cy < top + WK_EDGE && d.cy > top - 40) speed = -Math.ceil((1 - Math.max(0, d.cy - top) / WK_EDGE) * WK_SCROLL_MAX);
+      else if (d.cy > bottom - WK_EDGE && d.cy < bottom + 40) speed = Math.ceil((1 - Math.max(0, bottom - d.cy) / WK_EDGE) * WK_SCROLL_MAX);
+      if (speed) { var before = box.scrollTop; box.scrollTop += speed; if (box.scrollTop === before) speed = 0; }
+    }
     d.fl.style.transform = 'translate(' + tx + 'px,' + ty + 'px)';
     var t = d.target = wkTarget(d);
     if (t) {
@@ -1337,6 +1346,7 @@ body { margin: 0; }
       d.tip.textContent = '여기엔 놓을 수 없어요';
     }
     d.tip.style.transform = 'translate(' + Math.min(Math.max(d.cx - 50, 4), window.innerWidth - 150) + 'px,' + Math.max(ty - 24, 4) + 'px)';
+    if (speed) wkDragSchedule();   // keep scrolling (and re-snapping the ghost) while the finger rests at the edge
   }
   /* where the block's top edge snaps: one day column x one 30-minute slot, inside the grid (not the axis, not the sticky header) */
   function wkTarget(d) {
