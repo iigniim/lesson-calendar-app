@@ -169,3 +169,53 @@ console.log('OK members');
   console.log('OK same-name match');
 }
 
+// ---- household: normalized key and the family list (display only)
+{
+  const H = M.householdOf;
+  assert.strictEqual(H('101동', '1203호'), '101|1203'); assert.strictEqual(H('101', '1203'), '101|1203'); assert.strictEqual(H(' 101 동 ', ' 1203 호'), '101|1203');
+  assert.strictEqual(H('A', '101'), H('a동', '101호'), 'letters and case');
+  assert.strictEqual(H('101-1', '1203'), H('101 / 1', '1203'), 'separators ignored');
+  assert.strictEqual(H('', '1203'), ''); assert.strictEqual(H('101', ''), ''); assert.strictEqual(H('동', '호'), '', 'only the units = empty');
+  const d3 = {
+    members: [{ id: 'k', name: '김가나' }, { id: 'p', name: '박이안' }, { id: 'c', name: '최다온' }, { id: 's', name: '혼자' }, { id: 'n1', name: '무동호' }, { id: 'n2', name: '무동호2' }],
+    enrollments: [
+      { id: 'e1', month: '2026-10', name: '김가나', dong: '101동', ho: '1203호', memberId: 'k' },
+      { id: 'e2', month: '2026-10', name: '최다온', dong: '101', ho: '1203', memberId: 'c' },              // same household, other spelling, own 신청서
+      { id: 'e3', month: '2026-10', name: '혼자', dong: '202', ho: '1', memberId: 's' },
+      { id: 'e4', month: '2026-10', name: '무동호', dong: '', ho: '', memberId: 'n1' },
+      { id: 'e5', month: '2026-10', name: '무동호2', dong: '', ho: '', memberId: 'n2' }
+    ],
+    events: [{ id: 'v1', title: '박이안', memberId: 'p', date: '2026-10-06', enrollmentId: 'e1' }],           // family member on a shared 신청서
+    colors: {}
+  };
+  const fam = (id) => M.familyNames(d3, d3.enrollments.find((e) => e.id === id));
+  assert.deepStrictEqual(fam('e1'), ['박이안', '최다온'], '3+ members: the others, sorted, not itself');
+  assert.deepStrictEqual(fam('e2'), ['김가나', '박이안']);
+  assert.deepStrictEqual(fam('e3'), [], 'only one in the household: nothing');
+  assert.deepStrictEqual(fam('e4'), [], 'missing 동/호: never grouped (even with another empty one)');
+  d3.members.find((m) => m.id === 'p').name = '박이안(개명)'; M.applyNames(d3);
+  assert.deepStrictEqual(fam('e1'), ['박이안(개명)', '최다온'], 'follows a rename');
+  console.log('OK households');
+}
+
+// ---- representative weekday/time: most frequent (weekday, start) pair; tie = earlier weekday of the week, then earlier time
+{
+  const L = (date, start, end) => ({ date, start, end: end || start.replace(/^(\d\d):00$/, (m, h) => h + ':50') });
+  const R = M.representative;
+  assert.strictEqual(R([], 1), null);
+  assert.deepStrictEqual(R([L('2026-10-06', '14:00'), L('2026-10-13', '14:00')], 1), { day: 2, start: '14:00', end: '14:50' }, 'one weekday/time');
+  // several weekdays: Tue x3, Thu x2 -> Tue
+  assert.strictEqual(R([L('2026-10-06', '10:00'), L('2026-10-13', '10:00'), L('2026-10-20', '10:00'), L('2026-10-08', '10:00'), L('2026-10-15', '10:00')], 1).day, 2);
+  // several times on one weekday: Tue 10:00 x1, Tue 15:00 x2 -> 15:00
+  assert.strictEqual(R([L('2026-10-06', '10:00'), L('2026-10-13', '15:00'), L('2026-10-20', '15:00')], 1).start, '15:00');
+  // tie Tue vs Thu (2 each): Monday-first week -> Tue; Sunday-first week also Tue; Sat vs Sun tie differs with the week start
+  const tie = [L('2026-10-06', '10:00'), L('2026-10-13', '10:00'), L('2026-10-08', '10:00'), L('2026-10-15', '10:00')];
+  assert.strictEqual(R(tie, 1).day, 2);
+  const sunSat = [L('2026-10-03', '10:00'), L('2026-10-10', '10:00'), L('2026-10-04', '10:00'), L('2026-10-11', '10:00')];   // Sat x2, Sun x2
+  assert.strictEqual(R(sunSat, 1).day, 6, 'Monday-first week: Saturday comes before Sunday');
+  assert.strictEqual(R(sunSat, 0).day, 0, 'Sunday-first week: Sunday comes first');
+  // tie on the same weekday: earlier time
+  assert.strictEqual(R([L('2026-10-06', '15:00'), L('2026-10-13', '15:00'), L('2026-10-20', '09:00'), L('2026-10-27', '09:00')], 1).start, '09:00');
+  console.log('OK representative');
+}
+

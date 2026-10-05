@@ -201,7 +201,45 @@
     return merged;
   }
 
-  var api = { dedupe: dedupe, ensureEnrollments: ensureEnrollments, moveLessons: moveLessons, clean: clean, norm: norm, migrate: migrate, applyNames: applyNames, ensure: ensure, rename: rename, merge: merge, lessonCount: lessonCount };
+  /* Household key from the 동 and 호 fields: "101동" = "101", "1203호" = "1203"; spaces, "-" and "/" ignored, case ignored.
+     Missing 동 or 호 gives '' (never grouped). */
+  function householdOf(dong, ho) {
+    var f = function (v) { return String(v == null ? '' : v).normalize('NFC').toLowerCase().replace(/[\s\-\/.,]+/g, '').replace(/동|호/g, ''); };
+    var a = f(dong), b = f(ho);
+    return a && b ? a + '|' + b : '';
+  }
+
+  /* Names of the OTHER members of this 신청서's household (display only, computed from the current records, never stored):
+     everyone with a 신청서 of that household in any month, plus members whose lessons sit on such a 신청서 (a shared family 신청서). */
+  function familyNames(d, enr) {
+    var key = householdOf(enr.dong, enr.ho);
+    if (!key) return [];
+    var inHh = {}, ids = {}, names = {};
+    d.enrollments.forEach(function (e) { if (householdOf(e.dong, e.ho) === key) { inHh[e.id] = true; if (e.memberId) ids[e.memberId] = true; } });
+    d.events.forEach(function (e) { if (e.memberId && inHh[e.enrollmentId]) ids[e.memberId] = true; });
+    delete ids[enr.memberId];
+    d.members.forEach(function (m) { if (ids[m.id] && norm(m.name) !== norm(enr.name)) names[m.name] = true; });
+    return Object.keys(names).sort(function (a, b) { return a.localeCompare(b, 'ko'); });
+  }
+
+  /* The one weekday/time shown for a member: among `lessons` count each (weekday, start) pair and take the most frequent.
+     Ties: the earlier weekday in the week (weekStart = first day, 0 Sunday / 1 Monday), then the earlier time.
+     Returns { day, start, end } (end = the pair's most common end), or null without lessons. Pure: lessons need { date: "YYYY-MM-DD", start, end }. */
+  function representative(lessons, weekStart) {
+    var pairs = {}, order = [];
+    lessons.forEach(function (l) {
+      var p = l.date.split('-'), day = new Date(+p[0], +p[1] - 1, +p[2]).getDay(), k = day + '|' + l.start;
+      if (!pairs[k]) { pairs[k] = { day: day, start: l.start, n: 0, ends: {} }; order.push(k); }
+      pairs[k].n++; pairs[k].ends[l.end] = (pairs[k].ends[l.end] || 0) + 1;
+    });
+    if (!order.length) return null;
+    var ws = weekStart || 0, pos = function (x) { return (x.day - ws + 7) % 7; };
+    var best = order.map(function (k) { return pairs[k]; }).sort(function (a, b) { return b.n - a.n || pos(a) - pos(b) || (a.start < b.start ? -1 : a.start > b.start ? 1 : 0); })[0];
+    var end = Object.keys(best.ends).sort(function (a, b) { return best.ends[b] - best.ends[a] || (a < b ? -1 : 1); })[0];
+    return { day: best.day, start: best.start, end: end };
+  }
+
+  var api = { householdOf: householdOf, familyNames: familyNames, representative: representative, dedupe: dedupe, ensureEnrollments: ensureEnrollments, moveLessons: moveLessons, clean: clean, norm: norm, migrate: migrate, applyNames: applyNames, ensure: ensure, rename: rename, merge: merge, lessonCount: lessonCount };
   root.Members = api;
   if (typeof module !== 'undefined') module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
