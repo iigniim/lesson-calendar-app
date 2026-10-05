@@ -1,5 +1,5 @@
 /* Service worker: makes the app open offline. Bump CACHE when you change app files. */
-const CACHE = 'lesson-calendar-v52';
+const CACHE = 'lesson-calendar-v53';
 const SHELL = [
   './',
   './index.html',
@@ -8,6 +8,7 @@ const SHELL = [
   './icons/icon.svg',
   './icons/icon-192.png',
   './icons/icon-512.png',
+  './icons/icon-maskable-512.png',
   './icons/apple-touch-icon.png'
 ];
 
@@ -38,8 +39,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Own files and Google Fonts: cache first, fill the cache on first use.
-  const cacheable = url.origin === location.origin || url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com';
+  // Own files: cache first, fill the cache on first use.
+  const cacheable = url.origin === location.origin;
   if (!cacheable) return;
   event.respondWith(
     caches.match(req).then((hit) => hit || fetch(req).then((res) => {

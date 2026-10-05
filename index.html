@@ -983,7 +983,7 @@ body { margin: 0; }
     var from = WK_FROM, to = WK_TO, firstStart = 1e9;
     var cols = days.map(function (d) {
       var items = (by[d] || []).filter(function (e) { return e.status !== 'cancelled'; }).map(function (e) {
-        var a = toMin(e.start), b = toMin(e.end);
+        var a = Math.min(toMin(e.start), 1410), b = toMin(e.end);   // clamp: corrupt times must not stretch the grid past midnight
         if (b <= a) b = a + 30;
         b = Math.min(b, 1440);
         from = Math.min(from, Math.floor(a / 60)); to = Math.max(to, Math.ceil(b / 60)); firstStart = Math.min(firstStart, a);
@@ -1347,7 +1347,6 @@ body { margin: 0; }
   /* ---------- enrollments (신청서) ---------- */
   var ENR_DAYS = [[2, '화'], [3, '수'], [4, '목'], [5, '금'], [6, '토'], [0, '일']];
   function fmt(n) { return Number(n || 0).toLocaleString('ko-KR'); }
-  function digits(s) { return String(s || '').replace(/\D/g, ''); }
   function monthKey(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1); }
   function monthBounds(key) { var p = key.split('-').map(Number); return [key + '-01', ymd(new Date(p[0], p[1], 0))]; }
   function shiftKey(key, n) { var p = key.split('-').map(Number); return monthKey(new Date(p[0], p[1] - 1 + n, 1)); }

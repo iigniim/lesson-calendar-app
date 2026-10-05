@@ -10,6 +10,8 @@
 | `index.html` | 앱 전체 (화면, 스타일, 동작 코드) |
 | `manifest.webmanifest` | 앱 이름, 아이콘, 실행 방식 (설치에 필요) |
 | `sw.js` | 오프라인 실행을 위한 서비스 워커 |
+| `holidays.js` | 공휴일·음력 계산 (규칙 기반, 임시공휴일은 파일 위쪽 `EXTRA`에 추가) |
+| `holidays.test.js` | 공휴일·음력 테스트 (`node holidays.test.js`) |
 | `icons/` | 앱 아이콘 |
 | `CLAUDE.md` | Claude Code가 프로젝트를 이해하는 데 쓰는 메모 |
 

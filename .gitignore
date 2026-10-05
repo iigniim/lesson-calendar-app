@@ -7,3 +7,7 @@ node_modules
 *.png
 .DS_Store
 !icons/*.png
+.env
+.env.*
+# backup exports contain member names and phone numbers
+lesson-calendar-*.json
