@@ -183,6 +183,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .wkev.s1 { padding-block: 1px; }
 .wkev b { font-size: 11px; font-weight: 600; }
 .wkev small, .wkev em { font-size: 9px; font-style: normal; color: var(--text); font-variant-numeric: tabular-nums; }
+.wk-hit { position: absolute; z-index: 0; left: 0; right: 0; height: calc(var(--wk-row) / 2); background: var(--accent-soft); pointer-events: none; }
 .wk-now { position: absolute; z-index: 3; left: 0; right: 0; height: 1px; background: var(--accent); pointer-events: none; }
 .wk-now::before { content: ""; position: absolute; left: -3px; top: -3px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
 
@@ -1257,13 +1258,37 @@ body { margin: 0; }
     var ev = e.target.closest('[data-ev]');
     if (ev) { var x = state.events.find(function (z) { return z.id === ev.getAttribute('data-ev'); }); if (x) openSheet(x); return; }
     var dh = e.target.closest('.wk-dh');
-    if (dh) { state.selected = dh.getAttribute('data-date'); render(); }
+    if (dh) { state.selected = dh.getAttribute('data-date'); render(); return; }
+    // empty cell = day column x 30-minute slot (the grid's half-hour lines): add a lesson starting at that slot
+    var col = e.target.closest('.wk-col');
+    if (col && !wkMoved) { var t = wkSlotTime(col, e.clientY); openEnr(null, col.getAttribute('data-date'), t); }
   });
+  var wkMoved = false;   // true when the last touch travelled more than 8px (scroll or swipe): that gesture is not a tap
+  function wkSlotTime(col, clientY) {
+    var slot = Math.floor((clientY - col.getBoundingClientRect().top) / (WK_ROW / 2));
+    return fromMin(wkFrom * 60 + Math.max(0, slot) * 30);
+  }
+  /* brief press highlight on the slot under the finger (removed when the finger moves = scrolling) */
+  var wkHit = null;
+  function wkHitClear() { if (wkHit) { wkHit.remove(); wkHit = null; } }
+  $('#week').addEventListener('pointerdown', function (e) {
+    wkHitClear();
+    var col = e.target.closest('.wk-col');
+    if (!col || e.target.closest('[data-ev]')) return;
+    var slot = Math.max(0, Math.floor((e.clientY - col.getBoundingClientRect().top) / (WK_ROW / 2)));
+    wkHit = document.createElement('div');
+    wkHit.className = 'wk-hit';
+    wkHit.style.top = slot * WK_ROW / 2 + 'px';
+    col.appendChild(wkHit);
+    setTimeout(wkHitClear, 350);
+  });
+  ['pointercancel', 'pointermove'].forEach(function (n) { $('#week').addEventListener(n, function (e) { if (n === 'pointercancel' || e.pointerType === 'touch') wkHitClear(); }); });
   /* swipe left/right on the week grid to change week (mostly vertical moves are scrolling) */
   var wx = 0, wy = 0;
-  $('#week').addEventListener('touchstart', function (e) { wx = e.touches[0].clientX; wy = e.touches[0].clientY; }, { passive: true });
+  $('#week').addEventListener('touchstart', function (e) { wx = e.touches[0].clientX; wy = e.touches[0].clientY; wkMoved = false; }, { passive: true });
   $('#week').addEventListener('touchend', function (e) {
     var dx = e.changedTouches[0].clientX - wx, dy = e.changedTouches[0].clientY - wy;
+    wkMoved = Math.hypot(dx, dy) > 8;
     if (Math.abs(dx) > 60 && Math.abs(dx) > 1.5 * Math.abs(dy)) shiftWeek(dx < 0 ? 1 : -1);
   }, { passive: true });
   $('#today').addEventListener('click', function () {
@@ -1600,7 +1625,8 @@ body { margin: 0; }
     else note.textContent = ds.length + '회 (' + mdLabel(ds[0]) + ' ~ ' + mdLabel(ds[ds.length - 1]) + ')';
   }
   // date (optional): opened from the calendar, so start with that day's month and weekday
-  function openEnr(enr, date) {
+  // start (optional, "HH:MM"): opened from a Week-view cell, 50 minutes long like the default
+  function openEnr(enr, date, start) {
     eState.editing = enr ? enr.id : null;
     eState.periodDirty = !!enr;
     var key = date ? date.slice(0, 7) : monthKey(state.month), b = monthBounds(enr ? enr.month : key);
@@ -1615,8 +1641,8 @@ body { margin: 0; }
     $('#g-ps').value = enr ? enr.periodStart : b[0];
     $('#g-pe').value = enr ? enr.periodEnd : b[1];
     setDays(enr ? enr.days : date ? [parse(date).getDay()] : []);
-    $('#g-start').value = enr ? enr.start : '10:00';
-    $('#g-end').value = enr ? enr.end : '10:50';
+    $('#g-start').value = enr ? enr.start : start || '10:00';
+    $('#g-end').value = enr ? enr.end : start ? fromMin(Math.min(toMin(start) + 50, 1439)) : '10:50';
     syncDur();
     eState.slots = enr && enr.slots ? JSON.parse(JSON.stringify(enr.slots)) : {};
     var names = {};
