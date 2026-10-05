@@ -76,7 +76,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
   min-width: 0; min-height: 66px; border: 1px solid transparent; background: transparent;
   border-radius: 4px; padding: 4px 3px 3px; display: flex; flex-direction: column; align-items: stretch; gap: 3px; text-align: left;
 }
-.day .n { align-self: center; font-size: 13px; font-weight: 600; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; font-variant-numeric: tabular-nums; }
+.day .nrow { display: flex; align-items: center; justify-content: center; gap: 2px; min-width: 0; overflow: hidden; white-space: nowrap; }
+.day .lu { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 9px; font-weight: 400; line-height: 1; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+@media (max-width: 340px) { .day .lu { display: none; } }
+.agenda-h h2 .lfull { font-family: var(--f-body); font-size: 12px; font-weight: 400; color: var(--text-muted); margin-left: 6px; }
+.day .n { flex: none; font-size: 13px; font-weight: 600; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; font-variant-numeric: tabular-nums; }
 .day.c0 .n, .day.hol .n { color: var(--accent); }
 .day .hn { font-size: 10px; line-height: 1.1; color: var(--accent); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .day.c6 .n { color: var(--text-muted); }
@@ -570,6 +574,16 @@ body { margin: 0; }
   var LS = 'lesson-calendar-v1', LS_E = 'lesson-calendar-enroll-v1', LS_S = 'lesson-calendar-settings-v1';
 
   function pad(n) { return String(n).padStart(2, '0'); }
+  /* lunar date text: "15", "8.1" on the first day of a month, "윤6.1" for a leap month; full form for the day heading */
+  function lunarShort(s) {
+    var l = getLunar(s);
+    if (!l) return '';
+    return l.day === 1 ? (l.isLeap ? '윤' : '') + l.month + '.1' : String(l.day);
+  }
+  function lunarFull(s) {
+    var l = getLunar(s);
+    return l ? '음력 ' + (l.isLeap ? '윤' : '') + l.month + '월 ' + l.day + '일' : '';
+  }
   function ymd(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
   function parse(s) { var p = s.split('-').map(Number); return new Date(p[0], p[1] - 1, p[2]); }
   function addDays(s, n) { var d = parse(s); d.setDate(d.getDate() + n); return ymd(d); }
@@ -817,8 +831,8 @@ body { margin: 0; }
       }).join('');
       if (list.length > 2) chips += '<span class="more">+' + (list.length - 2) + '</span>';
       html += '<button type="button" class="' + cls + '" data-date="' + s + '" aria-label="' +
-        (d.getMonth() + 1) + '월 ' + d.getDate() + '일 ' + WD[d.getDay()] + '요일, ' + (hol ? esc(hol) + ', ' : '') + '수업 ' + list.length + '개">' +
-        '<span class="n">' + d.getDate() + '</span>' + (hol ? '<span class="hn">' + esc(hol) + '</span>' : '') + chips + '</button>';
+        (d.getMonth() + 1) + '월 ' + d.getDate() + '일 ' + WD[d.getDay()] + '요일, ' + (hol ? esc(hol) + ', ' : '') + (lunarFull(s) ? lunarFull(s) + ', ' : '') + '수업 ' + list.length + '개">' +
+        '<span class="nrow"><span class="n">' + d.getDate() + '</span><span class="lu">' + lunarShort(s) + '</span></span>' + (hol ? '<span class="hn">' + esc(hol) + '</span>' : '') + chips + '</button>';
     }
     $('#days').innerHTML = html;
   }
@@ -827,7 +841,7 @@ body { margin: 0; }
   function renderAgenda() {
     var d = parse(state.selected);
     var isToday = state.selected === ymd(new Date());
-    $('#a-title').innerHTML = (d.getMonth() + 1) + '월 ' + d.getDate() + '일 (' + WD[d.getDay()] + ')' + (isToday ? '<span class="tag">오늘</span>' : '') + (getHoliday(state.selected) ? '<span class="htag">' + esc(getHoliday(state.selected)) + '</span>' : '');
+    $('#a-title').innerHTML = (d.getMonth() + 1) + '월 ' + d.getDate() + '일 (' + WD[d.getDay()] + ')' + (getLunar(state.selected) ? '<small class="lfull">' + lunarFull(state.selected) + '</small>' : '') + (isToday ? '<span class="tag">오늘</span>' : '') + (getHoliday(state.selected) ? '<span class="htag">' + esc(getHoliday(state.selected)) + '</span>' : '');
     var list = byDate()[state.selected] || [];
     var active = list.filter(function (e) { return e.status !== 'cancelled'; });
     var done = list.filter(function (e) { return e.status === 'done'; }).length;

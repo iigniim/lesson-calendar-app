@@ -1,5 +1,5 @@
 /* Service worker: makes the app open offline. Bump CACHE when you change app files. */
-const CACHE = 'lesson-calendar-v37';
+const CACHE = 'lesson-calendar-v38';
 const SHELL = [
   './',
   './index.html',
