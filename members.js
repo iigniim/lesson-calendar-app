@@ -145,7 +145,33 @@
     return { moved: moved, enrollmentIds: Object.keys(touched) };
   }
 
-  var api = { moveLessons: moveLessons, clean: clean, norm: norm, migrate: migrate, applyNames: applyNames, ensure: ensure, rename: rename, merge: merge, lessonCount: lessonCount };
+  /* After moveLessons: every moved lesson that still has no 신청서 (the member has none that month) gets one, so sheets, color and
+     copy-last-month work for that member. It copies 동/호, phone and time from the member's nearest other 신청서, or stays blank for a brand-new member
+     (days, period and time are then filled from the lessons by the app's sync). Returns the created enrollments. */
+  function ensureEnrollments(d, ids, toId) {
+    var to = d.members.filter(function (m) { return m.id === toId; })[0], want = {}, made = [];
+    if (!to) return made;
+    ids.forEach(function (id) { want[id] = true; });
+    d.events.forEach(function (e) {
+      if (!want[e.id] || e.enrollmentId) return;
+      var month = e.date.slice(0, 7), enr = made.filter(function (x) { return x.month === month; })[0];
+      if (!enr) {
+        var mine = d.enrollments.concat(made).filter(function (x) { return x.memberId === toId; });
+        var src = mine.filter(function (x) { return x.month <= month; }).sort(function (a, b) { return a.month < b.month ? 1 : -1; })[0] ||
+          mine.sort(function (a, b) { return a.month < b.month ? -1 : 1; })[0];
+        var y = +month.slice(0, 4), m = +month.slice(5), last = new Date(y, m, 0).getDate();
+        enr = { id: d.newId ? d.newId() : 'e' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), memberId: toId, month: month, name: to.name,
+          dong: src ? src.dong : '', ho: src ? src.ho : '', phone: src ? src.phone : '', periodStart: month + '-01', periodEnd: month + '-' + (last < 10 ? '0' : '') + last,
+          days: [], count: 0, start: src ? src.start : '10:00', end: src ? src.end : '10:50', fee: 0, appliedOn: '' };
+        made.push(enr);
+      }
+      e.enrollmentId = enr.id;
+    });
+    made.forEach(function (x) { d.enrollments.push(x); });
+    return made;
+  }
+
+  var api = { ensureEnrollments: ensureEnrollments, moveLessons: moveLessons, clean: clean, norm: norm, migrate: migrate, applyNames: applyNames, ensure: ensure, rename: rename, merge: merge, lessonCount: lessonCount };
   root.Members = api;
   if (typeof module !== 'undefined') module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

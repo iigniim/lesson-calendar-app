@@ -1196,10 +1196,11 @@ body { margin: 0; }
             : state.events.filter(function (x) { return x.memberId === old.memberId; });
           var ids = pick.map(function (x) { return x.id; }); if (ids.indexOf(upd.id) < 0) ids.push(upd.id);
           var mv = Members.moveLessons(memberData(), ids, mem.id);
-          lsSave();
-          mv.enrollmentIds.forEach(function (id) { syncEnrFromLessons(id); });
+          var made = Members.ensureEnrollments(memberData(), ids, mem.id);   // a member without a 신청서 that month gets one
+          lsSave(); saveEnr();
+          mv.enrollmentIds.concat(made.map(function (x) { return x.id; })).forEach(function (id) { syncEnrFromLessons(id); });
           undoData = { snap: snap, done: '회원 변경을 되돌렸어요' };
-          $('#undo-text').textContent = mv.moved + '개 수업의 회원을 변경했어요';
+          $('#undo-text').textContent = mv.moved + '개 수업의 회원을 변경했어요' + (made.length ? ' · 신청서 ' + made.length + '건 생성' : '');
           $('#undo').hidden = false;
           clearTimeout(undoTimer); undoTimer = setTimeout(function () { $('#undo').hidden = true; undoData = null; }, 5000);
         } else if (after.length) {

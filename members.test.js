@@ -116,5 +116,19 @@ console.log('OK members');
   d2 = mk(); const cnt = d2.events.length; M.moveLessons(d2, d2.events.filter((e) => e.memberId === 'm1').map((e) => e.id), 'm2');
   assert.strictEqual(d2.events.length, cnt, 'moving never drops lessons'); assert.ok(d2.events.every((e) => e.memberId === 'm2'));
   assert.strictEqual(M.moveLessons(mk(), ['x2'], 'nobody').moved, 0);
+  // ---- ensureEnrollments: a member without a 신청서 that month gets one
+  d2 = mk(); n = 0;
+  let mv = M.moveLessons(d2, ['x1', 'x3'], 'm2'); const made = M.ensureEnrollments(d2, ['x1', 'x3'], 'm2');
+  assert.strictEqual(made.length, 1, 'only September is missing (October 신청서 of m2 exists)');
+  assert.strictEqual(made[0].month, '2026-09'); assert.strictEqual(made[0].memberId, 'm2');
+  assert.deepStrictEqual([made[0].dong, made[0].ho], ['B', '2'], 'copies 동/호 from the member\'s other 신청서');
+  assert.strictEqual(d2.events.find((e) => e.id === 'x1').enrollmentId, made[0].id, 'the lesson is linked to it');
+  assert.ok(d2.enrollments.some((e) => e.id === made[0].id));
+  d2 = mk(); d2.members.push({ id: 'm3', name: '새사람' }); M.moveLessons(d2, ['x2', 'x3'], 'm3');
+  const made3 = M.ensureEnrollments(d2, ['x2', 'x3'], 'm3');
+  assert.strictEqual(made3.length, 1); assert.deepStrictEqual([made3[0].month, made3[0].dong, made3[0].ho, made3[0].name], ['2026-10', '', '', '새사람'], 'brand-new member: blank 동/호');
+  assert.strictEqual(made3[0].periodEnd, '2026-10-31');
+  assert.ok(d2.events.filter((e) => e.memberId === 'm3').every((e) => e.enrollmentId === made3[0].id));
+  assert.strictEqual(M.ensureEnrollments(d2, ['x2', 'x3'], 'm3').length, 0, 'second call creates nothing');
   console.log('OK moveLessons');
 }
