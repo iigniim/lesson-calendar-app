@@ -190,6 +190,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .wkev { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 .wkev.drag-src { opacity: 0.35; }
 .wk-float { position: fixed; z-index: 60; margin: 0; pointer-events: none; outline: 1px solid var(--accent); }
+.wk-ghost { position: absolute; z-index: 2; left: 1px; right: 1px; box-sizing: border-box; border: 1px dashed var(--accent); border-radius: 4px; background: var(--accent-soft); pointer-events: none; }
+.wk-tip { position: fixed; left: 0; top: 0; z-index: 61; padding: 3px 6px; border: 1px solid var(--accent); border-radius: 4px; background: var(--surface); color: var(--text); font-size: 11px; line-height: 1.3; font-variant-numeric: tabular-nums; white-space: nowrap; pointer-events: none; }
 .wk-now { position: absolute; z-index: 3; left: 0; right: 0; height: 1px; background: var(--accent); pointer-events: none; }
 .wk-now::before { content: ""; position: absolute; left: -3px; top: -3px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
 
@@ -948,7 +950,7 @@ body { margin: 0; }
 
   /* ---------- week view ---------- */
   var WK_FROM = 6, WK_TO = 23, WK_ROW = 52;   // default time range and px per hour (keep WK_ROW in sync with --wk-row)
-  var wkShown = null, wkFrom = WK_FROM;
+  var wkShown = null, wkFrom = WK_FROM, wkTo = WK_TO;
   function loadView() { try { return localStorage.getItem(LS_VIEW) === 'week' ? 'week' : 'month'; } catch (e) { return 'month'; } }
   function isWeek() { return state.tab === 'cal' && state.view === 'week'; }
   function setView(v) {
@@ -991,7 +993,7 @@ body { margin: 0; }
       });
       return wkLayout(items);
     });
-    wkFrom = from;
+    wkFrom = from; wkTo = to;
     var head = '<div class="wk-head"><span></span>' + days.map(function (d) {
       var dt = parse(d), hol = getHoliday(d), cls = 'wk-dh c' + dt.getDay() + (hol ? ' hol' : '') + (d === todayS ? ' today' : '') + (d === state.selected ? ' sel' : '');
       return '<button type="button" class="' + cls + '" data-date="' + d + '" aria-label="' + (dt.getMonth() + 1) + '월 ' + dt.getDate() + '일 ' + WD[dt.getDay()] + '요일' + (hol ? ', ' + esc(hol) : '') + '">' +
@@ -1288,7 +1290,7 @@ body { margin: 0; }
   });
   ['pointerup', 'pointercancel'].forEach(function (n) {
     document.addEventListener(n, function (e) {
-      if (wkDrag && e.pointerId === wkDrag.pid) wkDragEnd(n === 'pointerup');
+      if (wkDrag && e.pointerId === wkDrag.pid) wkDragEnd(n === 'pointerup', e);
       else if (wkPress && e.pointerId === wkPress.pid) wkPressClear();
     });
   });
@@ -1307,7 +1309,12 @@ body { margin: 0; }
     fl.style.top = '0'; fl.style.left = '0'; fl.style.width = r.width + 'px'; fl.style.height = r.height + 'px';
     document.body.appendChild(fl);
     p.el.classList.add('drag-src');
-    wkDrag = { el: p.el, fl: fl, id: p.el.getAttribute('data-ev'), pid: p.pid, gx: p.x - r.left, gy: p.y - r.top, cx: p.x, cy: p.y, raf: 0 };
+    var id = p.el.getAttribute('data-ev'), ev = state.events.find(function (x) { return x.id === id; });
+    var dur = ev ? toMin(ev.end) - toMin(ev.start) : 0;
+    var ghost = document.createElement('div'), tip = document.createElement('div');
+    ghost.className = 'wk-ghost'; tip.className = 'wk-tip';
+    document.body.appendChild(tip);
+    wkDrag = { el: p.el, fl: fl, ghost: ghost, tip: tip, id: id, ev: ev, dur: dur > 0 ? dur : 30, pid: p.pid, gx: p.x - r.left, gy: p.y - r.top, cx: p.x, cy: p.y, raf: 0, target: null };
     wkDragged = true; wkMoved = true;
     try { if (navigator.vibrate) navigator.vibrate(15); } catch (err) {}
     wkDragFrame();
@@ -1316,16 +1323,58 @@ body { margin: 0; }
   function wkDragFrame() {
     if (!wkDrag) return;
     wkDrag.raf = 0;
-    wkDrag.fl.style.transform = 'translate(' + (wkDrag.cx - wkDrag.gx) + 'px,' + (wkDrag.cy - wkDrag.gy) + 'px)';
+    var d = wkDrag, tx = d.cx - d.gx, ty = d.cy - d.gy;
+    d.fl.style.transform = 'translate(' + tx + 'px,' + ty + 'px)';
+    var t = d.target = wkTarget(d);
+    if (t) {
+      if (d.ghost.parentNode !== t.col) t.col.appendChild(d.ghost);
+      d.ghost.style.top = t.slot * WK_ROW / 2 + 'px';
+      d.ghost.style.height = Math.max(d.dur * WK_ROW / 60 - 1, 14) + 'px';
+      d.tip.textContent = (t.date !== d.ev.date ? WD[parse(t.date).getDay()] + ' ' : '') + fromMin(t.start) + '–' + fromMin(t.start + d.dur);
+      d.tip.style.color = '';
+    } else {
+      d.ghost.remove();
+      d.tip.textContent = '여기엔 놓을 수 없어요';
+    }
+    d.tip.style.transform = 'translate(' + Math.min(Math.max(d.cx - 50, 4), window.innerWidth - 150) + 'px,' + Math.max(ty - 24, 4) + 'px)';
   }
-  function wkDragEnd(commit) {
+  /* where the block's top edge snaps: one day column x one 30-minute slot, inside the grid (not the axis, not the sticky header) */
+  function wkTarget(d) {
+    var box = $('#wk-scroll'), cols = box.querySelectorAll('.wk-col'), head = box.querySelector('.wk-head');
+    if (!cols.length || !head) return null;
+    var br = box.getBoundingClientRect(), first = cols[0].getBoundingClientRect(), last = cols[cols.length - 1].getBoundingClientRect();
+    if (d.cx < first.left || d.cx >= last.right || d.cy < head.getBoundingClientRect().bottom || d.cy > br.bottom) return null;
+    var col = null, cr = null;
+    for (var i = 0; i < cols.length; i++) { cr = cols[i].getBoundingClientRect(); if (d.cx >= cr.left && d.cx < cr.right) { col = cols[i]; break; } }
+    if (!col) return null;
+    // the block must stay inside the visible hours (and before midnight), duration unchanged
+    var last_ = Math.max(0, Math.floor((Math.min(wkTo * 60, 1439) - d.dur - wkFrom * 60) / 30));
+    var slot = Math.min(last_, Math.max(0, Math.round((d.cy - d.gy - cr.top) / (WK_ROW / 2))));
+    return { col: col, date: col.getAttribute('data-date'), slot: slot, start: wkFrom * 60 + slot * 30 };
+  }
+  function wkDragEnd(commit, e) {
     var d = wkDrag; if (!d) return;
     wkDrag = null;
     cancelAnimationFrame(d.raf);
-    d.fl.remove();
+    if (commit && e) { d.cx = e.clientX; d.cy = e.clientY; d.target = wkTarget(d); }   // the drop point itself, not the last animation frame
+    d.fl.remove(); d.ghost.remove(); d.tip.remove();
     d.el.classList.remove('drag-src');
     try { d.el.releasePointerCapture(d.pid); } catch (err) {}
     wkSuppress = true; setTimeout(function () { wkSuppress = false; }, 400);
+    if (commit && d.target && d.ev) wkMoveLesson(d);
+  }
+  // Commit with the same update path as the edit form (put: save, sync the 신청서, re-render); only date and times change
+  function wkMoveLesson(d) {
+    var ev = state.events.find(function (x) { return x.id === d.id; }), t = d.target;
+    if (!ev) return;
+    var start = fromMin(t.start), end = fromMin(t.start + d.dur);
+    if (t.date === ev.date && start === ev.start && end === ev.end) return;   // dropped where it was: nothing to do
+    var prev = Object.assign({}, ev);
+    put(Object.assign({}, ev, { date: t.date, start: start, end: end }));
+    undoData = { move: prev };
+    $('#undo-text').textContent = '수업을 이동했어요';
+    $('#undo').hidden = false;
+    clearTimeout(undoTimer); undoTimer = setTimeout(function () { $('#undo').hidden = true; undoData = null; }, 5000);
   }
   /* swipe left/right on the week grid to change week (mostly vertical moves are scrolling) */
   var wx = 0, wy = 0;
@@ -1593,6 +1642,10 @@ body { margin: 0; }
   $('#undo-btn').addEventListener('click', function () {
     if (!undoData) return;
     var d = undoData; undoData = null; $('#undo').hidden = true; clearTimeout(undoTimer);
+    if (d.move) {   // undo a drag-move: put the lesson back exactly as it was
+      if (state.events.some(function (x) { return x.id === d.move.id; })) { put(d.move); toast('수업을 되돌렸어요'); }
+      return;
+    }
     d.enrs.forEach(function (e) { if (!state.enrollments.some(function (x) { return x.id === e.id; })) state.enrollments.push(e); });
     d.evs.forEach(function (e) { if (!state.events.some(function (x) { return x.id === e.id; })) state.events.push(e); });
     saveEnr(); saveEvents(); render(); toast(d.enrs.length + '건을 되돌렸어요');
