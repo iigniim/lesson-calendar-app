@@ -1636,16 +1636,12 @@ body { margin: 0; }
     return n;
   }
   // Printed 신청서 shows one weekday and time: the weekday with most lessons (tie: earliest lesson), its most common time (tie: earliest)
+  // The one weekday/time the printed forms show: most frequent (weekday, start) pair of the month's lessons;
+  // ties: earlier weekday of the week (WEEK_START), then earlier time (Members.representative). No lessons: the 신청서's own first day and time, fromLessons false.
   function repDay(enr) {
     var ls = lessonsFor(enr).filter(function (l) { return l.date.slice(0, 7) === enr.month; });
-    if (!ls.length) return { day: enr.days[0], start: enr.start, end: enr.end };
-    var cnt = {}, order = [];
-    ls.forEach(function (l) { var d = parse(l.date).getDay(); if (!(d in cnt)) { cnt[d] = 0; order.push(d); } cnt[d]++; });
-    var day = order.reduce(function (best, d) { return cnt[d] > cnt[best] ? d : best; }, order[0]);
-    var mine = ls.filter(function (l) { return parse(l.date).getDay() === day; }), tc = {}, bestT = null;
-    mine.forEach(function (l) { var k = l.start + '|' + l.end; tc[k] = (tc[k] || 0) + 1; });
-    mine.forEach(function (l) { var k = l.start + '|' + l.end; if (!bestT || tc[k] > tc[bestT]) bestT = k; });
-    return { day: day, start: bestT.split('|')[0], end: bestT.split('|')[1] };
+    var rep = Members.representative(ls, WEEK_START);
+    return rep ? { day: rep.day, start: rep.start, end: rep.end, fromLessons: true } : { day: enr.days[0], start: enr.start, end: enr.end, fromLessons: false };
   }
   function genDates(enr) {
     var out = [];
@@ -2059,6 +2055,12 @@ body { margin: 0; }
       '<p class="brand">Acrovista Sports Community</p>' +
       '</div>';
   }
+  // 요일/시간 on the sign sheet: one representative weekday and time ("화 14:00~14:50"); without lessons the 신청서's own days/times as before
+  function dayTimeField(enr) {
+    var rep = repDay(enr);
+    if (rep.fromLessons) return WD[rep.day] + ' ' + rep.start + '~' + rep.end;
+    return enr.slots && Object.keys(enr.slots).length ? timeText(enr) : dayText(enr, ',') + ' / ' + timeText(enr);
+  }
   function signRight(enr, rows, from) {
     var y = enr.month.slice(0, 4), m = Number(enr.month.slice(5));
     var body = '';
@@ -2071,7 +2073,7 @@ body { margin: 0; }
       '<table class="info">' +
       '<tr><th>성 명</th><td>' + esc(enr.name) + '</td><th>담 당</th><td>' + esc(state.settings.instructor) + '</td></tr>' +
       '<tr><th>동/호수</th><td>' + esc(enr.dong) + ' 동 &nbsp; ' + esc(enr.ho) + ' 호</td><th>강습/년월</th><td>' + y + ' 년 ' + m + ' 월</td></tr>' +
-      '<tr><th>전화번호</th><td>' + esc(enr.phone) + '</td><th>요일/시간</th><td>' + esc(enr.slots && Object.keys(enr.slots).length ? timeText(enr) : dayText(enr, ',') + ' / ' + timeText(enr)) + '</td></tr>' +
+      '<tr><th>전화번호</th><td>' + esc(enr.phone) + '</td><th>요일/시간</th><td>' + esc(dayTimeField(enr)) + '</td></tr>' +
       '</table>' +
       '<table class="rows"><tr><th class="n"></th><th>강습 날짜</th><th>강습 시간</th><th>회 원</th></tr>' + body + '</table>' +
       '</div>';
