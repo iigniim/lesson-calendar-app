@@ -152,6 +152,17 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .mtotal { margin: 0; padding: 8px 12px; border-top: 1px solid var(--border); font-size: 12px; line-height: 1.3; color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .mtotal b { font-weight: 400; color: var(--text); }
 .cal .mtotal { margin: 8px -6px -10px; }
+.wk-sum { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; }
+.wk-sum table { width: 100%; table-layout: fixed; border-collapse: collapse; }
+.wk-sum th, .wk-sum td { padding: 0; text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wk-sum th { padding: 11px 0 5px; font-size: 11px; font-weight: 400; line-height: 1.2; color: var(--text-muted); border-bottom: 1px solid var(--border); }
+.wk-sum td { padding: 6px 0 11px; font-size: 14px; line-height: 1.3; color: var(--text); }
+.wk-sum .red { color: var(--accent); }
+.wk-sum th.today, .wk-sum td.today { color: var(--accent); }
+.wk-sum td.zero { color: var(--text-muted); }
+.wk-sum .tot { border-left: 1px solid var(--border); }
+.wk-sum td.tot { font-weight: 600; }
+.wk-sum td.tot.zero { font-weight: 400; }
 .wk-body { position: relative; height: var(--wk-h); }
 .wk-body::before, .wk-body::after { content: ""; position: absolute; inset: 0; pointer-events: none; }
 .wk-body::before { background: linear-gradient(var(--border) 1px, transparent 1px) 0 0 / 100% var(--wk-row); }
@@ -376,7 +387,8 @@ body { margin: 0; }
     <p class="mtotal" id="mtotal-m"></p>
   </section>
 
-  <section class="wk" id="week" aria-label="주간 달력" hidden><div class="wk-scroll" id="wk-scroll"></div><p class="mtotal" id="mtotal-w"></p></section>
+  <section class="wk" id="week" aria-label="주간 달력" hidden><div class="wk-scroll" id="wk-scroll"></div></section>
+  <div class="wk-sum" id="wk-sum" hidden></div>
 
   <section id="agenda" aria-live="polite">
     <div class="agenda-h"><h2 id="a-title"></h2><p id="a-count"></p></div>
@@ -993,6 +1005,14 @@ body { margin: 0; }
     }).join('') + '</div>';
     var keep = box.scrollTop, same = wkShown === first;
     box.innerHTML = head + body;
+    var total = 0;
+    $('#wk-sum').innerHTML = '<table><thead><tr>' + days.map(function (d) {
+      var dt = parse(d), cls = (d === todayS ? 'today ' : '') + (dt.getDay() === 0 || getHoliday(d) ? 'red' : '');
+      return '<th class="' + cls + '">' + WD[dt.getDay()] + '</th>';
+    }).join('') + '<th class="tot">합계</th></tr></thead><tbody><tr>' + days.map(function (d, i) {
+      var n = cols[i].length; total += n;
+      return '<td class="' + (d === todayS ? 'today' : '') + (n ? '' : ' zero') + '">' + (n || '–') + '</td>';
+    }).join('') + '<td class="tot' + (total ? '' : ' zero') + '">' + (total || '–') + '</td></tr></tbody></table>';
     wkShown = first;
     if (same) { box.scrollTop = keep; return; }
     // first open of this week: show the current time, else the first lesson, else 08:00
@@ -1012,10 +1032,9 @@ body { margin: 0; }
   function render() {
     assignColors(); renderHead(); renderGrid(); renderAgenda(); renderEnr(); renderTabs();
     var wk = isWeek();
-    $('#cal').hidden = wk; $('#agenda').hidden = wk; $('#week').hidden = !wk;
+    $('#cal').hidden = wk; $('#agenda').hidden = wk; $('#week').hidden = !wk; $('#wk-sum').hidden = !wk;
     renderWeek();   // after unhiding: a hidden box cannot be scrolled
     $('#mtotal-m').innerHTML = monthTotalHtml(state.month);
-    $('#mtotal-w').innerHTML = monthTotalHtml(parse(addDays(weekStartOf(state.selected), 3)));
     document.querySelectorAll('.vseg [data-view]').forEach(function (b) { b.setAttribute('aria-selected', String(b.getAttribute('data-view') === state.view)); });
   }
 
