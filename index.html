@@ -637,6 +637,7 @@ body { margin: 0; }
 <div class="toast upd" id="upd" role="status" hidden><span>새 버전이 있어요.</span><button type="button" id="upd-reload">새로고침</button></div>
 
 <script src="holidays.js"></script>
+<script src="members.js"></script>
 <script>
 (function () {
   'use strict';
@@ -644,7 +645,8 @@ body { margin: 0; }
   var WD = ['일', '월', '화', '수', '목', '금', '토'];
   var WEEK_START = 1;   // first day of the week in Week view: 0 = Sunday, 1 = Monday
   var LS_VIEW = 'lesson-calendar-view-v1';   // last selected view (device only, not part of the backup)
-  var LS = 'lesson-calendar-v1', LS_E = 'lesson-calendar-enroll-v1', LS_S = 'lesson-calendar-settings-v1';
+  var LS = 'lesson-calendar-v1', LS_E = 'lesson-calendar-enroll-v1', LS_S = 'lesson-calendar-settings-v1', LS_M = 'lesson-calendar-members-v1';
+  var BACKUP_SUFFIX = '__backup_before_member_id_migration';   // raw copy of the old data, written once before member ids are added
 
   function pad(n) { return String(n).padStart(2, '0'); }
   /* lunar date text for a calendar cell: "8.15", "윤6.3" (leap month); the full form is for the day heading */
@@ -673,11 +675,13 @@ body { margin: 0; }
   var PALETTE = [[245, 62, 44], [28, 62, 44], [305, 62, 44], [95, 62, 40], [195, 62, 40], [345, 62, 44], [70, 62, 40], [265, 62, 44], [160, 55, 38], [45, 62, 42], [325, 62, 44], [285, 55, 44],
     [28, 38, 30], [215, 22, 46], [70, 42, 32], [285, 30, 34], [350, 38, 58], [175, 50, 27]];
   // key = 동|호 so all members of one 신청서 (and the same household next month) share a color; name when there is no 동/호
-  function householdKey(enr) { return enr.dong && enr.ho ? enr.dong + '|' + enr.ho : 'n:' + enr.name; }
+  // who a lesson / 신청서 belongs to: the member id (name only for data that has not been migrated yet)
+  function memberOf(x) { return x.memberId || 'n:' + (x.title || x.name); }
+  function householdKey(enr) { return enr.dong && enr.ho ? enr.dong + '|' + enr.ho : 'm:' + memberOf(enr).replace(/^n:/, ''); }
   function lessonKey(ev) {
     var en = (ev.enrollmentId && state.enrollments.find(function (e) { return e.id === ev.enrollmentId; })) ||
-      state.enrollments.find(function (e) { return e.name === ev.title; });
-    return en ? householdKey(en) : 'n:' + (ev.title || '');
+      state.enrollments.find(function (e) { return memberOf(e) === memberOf(ev); });
+    return en ? householdKey(en) : 'm:' + memberOf(ev).replace(/^n:/, '');
   }
   function hh(key) {
     var c = PALETTE[state.settings.colors[key]] || PALETTE[0];
@@ -714,6 +718,7 @@ body { margin: 0; }
   var state = {
     events: [],
     enrollments: [],
+    members: [],
     settings: { instructor: '김민기', label: '오전헬스', colors: {} },
     tab: 'cal',
     view: loadView(),
@@ -732,13 +737,14 @@ body { margin: 0; }
     try { var a = JSON.parse(localStorage.getItem(LS) || '[]'); return Array.isArray(a) ? a.filter(validEvent) : []; }
     catch (e) { return []; }
   }
+  function saveMembers() { try { localStorage.setItem(LS_M, JSON.stringify(state.members)); } catch (e) {} }
   function lsSave() {
-    try { localStorage.setItem(LS, JSON.stringify(state.events)); pushSoon(); return true; }
+    try { localStorage.setItem(LS, JSON.stringify(state.events)); saveMembers(); pushSoon(); return true; }
     catch (e) { toast('저장 공간이 부족해요. 백업 후 정리해 주세요.'); return false; }
   }
   var saveEvents = lsSave;
   function saveEnr() {
-    try { localStorage.setItem(LS_E, JSON.stringify(state.enrollments)); pushSoon(); return true; }
+    try { localStorage.setItem(LS_E, JSON.stringify(state.enrollments)); saveMembers(); pushSoon(); return true; }
     catch (e) { toast('저장 공간이 부족해요. 백업 후 정리해 주세요.'); return false; }
   }
   function saveSettings() { try { localStorage.setItem(LS_S, JSON.stringify(state.settings)); pushSoon(); } catch (e) {} }
@@ -759,6 +765,7 @@ body { margin: 0; }
       days: Array.isArray(e.days) ? e.days.filter(function (n) { return n >= 0 && n <= 6; }) : [],
       count: Number(e.count) || 0, start: e.start || '10:00', end: e.end || '10:50', fee: Number(e.fee) || 0, appliedOn: e.appliedOn || ''
     };
+    if (typeof e.memberId === 'string' && e.memberId) o.memberId = e.memberId;
     var sl = cleanSlots(e.slots);
     if (sl) o.slots = sl;
     // resident confirmation signature (optional): the count and fee shown when it was signed
@@ -768,6 +775,27 @@ body { margin: 0; }
   function loadJSON(key, fallback) {
     try { var v = JSON.parse(localStorage.getItem(key)); return v == null ? fallback : v; } catch (e) { return fallback; }
   }
+  function validMember(m) { return m && typeof m.id === 'string' && typeof m.name === 'string' && m.name.trim(); }
+  function memberData() { return { events: state.events, enrollments: state.enrollments, members: state.members, colors: state.settings.colors, newId: newId }; }
+  // Names shown everywhere come from the member record (title / name are only a derived copy)
+  function applyMemberNames() { return Members.applyNames(memberData()); }
+  /* Adds member ids to data that has none (old saves, old backups, an old cloud copy). Idempotent.
+     The first time it changes anything, the raw old data is copied to <key>__backup_before_member_id_migration (never overwritten). */
+  function runMemberMigration() {
+    var d = memberData(), before = state.members.length, changed = Members.migrate(d);
+    state.members = d.members;
+    if (changed) {
+      try {
+        [LS, LS_E, LS_S].forEach(function (k) {
+          var raw = localStorage.getItem(k);
+          if (raw != null && localStorage.getItem(k + BACKUP_SUFFIX) == null) localStorage.setItem(k + BACKUP_SUFFIX, raw);
+        });
+      } catch (e) { toast('저장 공간이 부족해요. 백업 후 정리해 주세요.'); }
+      applyMemberNames();
+      lsSave(); saveEnr(); saveSettings();
+    }
+    return changed;
+  }
   async function put(ev) {
     var i = state.events.findIndex(function (e) { return e.id === ev.id; });
     if (i >= 0) state.events[i] = ev; else state.events.push(ev);
@@ -776,6 +804,8 @@ body { margin: 0; }
   function initStore() {
     state.mode = 'local';
     state.events = lsLoad();
+    var mm = loadJSON(LS_M, []);
+    state.members = Array.isArray(mm) ? mm.filter(validMember).map(function (m) { return { id: m.id, name: m.name }; }) : [];
     var en = loadJSON(LS_E, []);
     state.enrollments = Array.isArray(en) ? en.filter(validEnr).map(cleanEnr) : [];
     var s = loadJSON(LS_S, null);
@@ -785,6 +815,8 @@ body { margin: 0; }
       state.settings.colors = cleanColors(s.colors);
     }
     try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
+    runMemberMigration();
+    applyMemberNames();
     syncAllEnrollments();
     render();
     cloudStart();
@@ -795,7 +827,7 @@ body { margin: 0; }
   var SB = 'https://yxeyfcuxwmnjjctllwjc.supabase.co', SB_KEY = 'sb_publishable_QrFHUHo3OVEcQF3NrwvF_w_rHbhct7S';
   var LS_A = 'lesson-calendar-auth-v1', LS_SYNC = 'lesson-calendar-lastsync-v1';
   var sess = loadJSON(LS_A, null), pushTimer = null;
-  function blob() { return { app: 'lesson-calendar', version: 2, events: state.events, enrollments: state.enrollments, settings: state.settings }; }
+  function blob() { return { app: 'lesson-calendar', version: 3, events: state.events, enrollments: state.enrollments, members: state.members, settings: state.settings }; }
   async function sb(path, opt, token) {
     opt = opt || {};
     opt.headers = Object.assign({ apikey: SB_KEY, 'Content-Type': 'application/json', Authorization: 'Bearer ' + (token || SB_KEY) }, opt.headers);
@@ -827,7 +859,10 @@ body { margin: 0; }
   function adopt(data) {
     state.events = (data.events || []).filter(validEvent);
     state.enrollments = (data.enrollments || []).filter(validEnr).map(cleanEnr);
+    state.members = (data.members || []).filter(validMember).map(function (m) { return { id: m.id, name: m.name }; });
     if (data.settings) { state.settings.instructor = data.settings.instructor || state.settings.instructor; state.settings.label = data.settings.label || state.settings.label; if (data.settings.colors) state.settings.colors = cleanColors(data.settings.colors); }
+    runMemberMigration();
+    applyMemberNames();
     syncAllEnrollments(true);
     lsSave(); saveEnr(); saveSettings(); render();
   }
@@ -843,7 +878,7 @@ body { margin: 0; }
       var cloudNewer = rows.length && (localStorage.getItem(LS_SYNC) || '') < rows[0].updated_at;
       if (rows.length && firstLogin && mine) {
         var d = rows[0].data;
-        adopt({ events: union(state.events, (d.events || []).filter(validEvent)), enrollments: union(state.enrollments, (d.enrollments || []).filter(validEnr).map(cleanEnr)), settings: d.settings });
+        adopt({ events: union(state.events, (d.events || []).filter(validEvent)), enrollments: union(state.enrollments, (d.enrollments || []).filter(validEnr).map(cleanEnr)), members: union(state.members, (d.members || []).filter(validMember)), settings: d.settings });
         await push();
       } else if (cloudNewer) {
         adopt(rows[0].data);
@@ -1037,6 +1072,7 @@ body { margin: 0; }
   var wkToday = ymd(new Date());
 
   function render() {
+    applyMemberNames();
     assignColors(); renderHead(); renderGrid(); renderAgenda(); renderEnr(); renderTabs();
     var wk = isWeek();
     $('#cal').hidden = wk; $('#agenda').hidden = wk; $('#week').hidden = !wk; $('#wk-sum').hidden = !wk;
@@ -1084,7 +1120,7 @@ body { margin: 0; }
     dur = toMin($('#f-end').value) - toMin($('#f-start').value) === 30 ? 30 : 50; // lessons are 30 or 50 min
     document.querySelector('#f-dur input[value="' + dur + '"]').checked = true;
     var names = {};
-    state.events.forEach(function (e) { if (e.title) names[e.title] = 1; });
+    state.members.forEach(function (m) { names[m.name] = 1; });
     $('#members').innerHTML = Object.keys(names).sort().map(function (n) { return '<option value="' + esc(n) + '">'; }).join('');
     $('#sheet').hidden = false;
     document.body.classList.add('locked');
@@ -1110,7 +1146,10 @@ body { margin: 0; }
       if (state.editing) {
         var st = document.querySelector('input[name=status]:checked').value;
         var old = state.events.find(function (x) { return x.id === state.editing; }) || {};
-        var upd = { id: state.editing, title: title, date: date, start: start, end: end, memo: memo, status: st };
+        var oldEnr = old.enrollmentId && state.enrollments.find(function (x) { return x.id === old.enrollmentId; });
+        var mem = Members.ensure(memberData(), title, oldEnr ? (oldEnr.dong && oldEnr.ho ? oldEnr.dong + '|' + oldEnr.ho : '') : '', { anyHousehold: true });
+        if (state.members.indexOf(mem) < 0) state.members.push(mem);   // a name that matched no member becomes a new one
+        var upd = { id: state.editing, title: mem.name, memberId: mem.id, date: date, start: start, end: end, memo: memo, status: st };
         if (old.enrollmentId) upd.enrollmentId = old.enrollmentId;
         if (old.sign && st === 'done') upd.sign = old.sign;
         var after = [];
@@ -1170,7 +1209,7 @@ body { margin: 0; }
   }
   // Same member = same name, and the same enrollment, or enrollments with the same 동+호 (registered separately), or a lesson without an enrollment
   function sameMember(a, b) {
-    if (a.title !== b.title) return false;
+    if (memberOf(a) !== memberOf(b)) return false;
     if (!a.enrollmentId || !b.enrollmentId || a.enrollmentId === b.enrollmentId) return true;
     var ea = state.enrollments.find(function (e) { return e.id === a.enrollmentId; });
     var eb = state.enrollments.find(function (e) { return e.id === b.enrollmentId; });
@@ -1472,7 +1511,7 @@ body { margin: 0; }
     return state.events.filter(function (e) {
       if (e.status === 'cancelled') return false;
       if (e.enrollmentId) return e.enrollmentId === enr.id;
-      return e.title === enr.name && e.date.slice(0, 7) === enr.month;
+      return memberOf(e) === memberOf(enr) && e.date.slice(0, 7) === enr.month;
     }).sort(function (a, b) { return (a.date + a.start).localeCompare(b.date + b.start); });
   }
   // Count = lessons the member has signed (status done); fee = per-lesson price x count
@@ -1494,7 +1533,7 @@ body { margin: 0; }
   // Upcoming unsigned lessons win; without any, all lessons count. Saves only when something changed.
   // Lessons used for syncing: linked ones, plus unlinked ones only when no other enrollment of that month has the same name
   function syncLessons(enr) {
-    var same = state.enrollments.filter(function (e) { return e.month === enr.month && e.name === enr.name; }).length;
+    var same = state.enrollments.filter(function (e) { return e.month === enr.month && memberOf(e) === memberOf(enr); }).length;
     return lessonsFor(enr).filter(function (l) { return l.enrollmentId || same === 1; });
   }
   // Returns the synced copy of enr, or null when nothing changes
@@ -1628,7 +1667,7 @@ body { margin: 0; }
   function planDelete(ids) {
     var enrs = state.enrollments.filter(function (e) { return ids.indexOf(e.id) >= 0; }), evIds = {}, signed = 0, sealed = false;
     enrs.forEach(function (enr) {
-      var unique = state.enrollments.filter(function (e) { return e.month === enr.month && e.name === enr.name; }).length === 1;
+      var unique = state.enrollments.filter(function (e) { return e.month === enr.month && memberOf(e) === memberOf(enr); }).length === 1;
       lessonsFor(enr).forEach(function (l) {
         if (l.status === 'done') signed++;
         else if (l.status === 'scheduled' && (l.enrollmentId || unique)) evIds[l.id] = 1;
@@ -1748,7 +1787,7 @@ body { margin: 0; }
     syncDur();
     eState.slots = enr && enr.slots ? JSON.parse(JSON.stringify(enr.slots)) : {};
     var names = {};
-    state.enrollments.forEach(function (e) { names[e.name] = 1; });
+    state.members.forEach(function (m) { names[m.name] = 1; });
     $('#g-members').innerHTML = Object.keys(names).sort().map(function (n) { return '<option value="' + esc(n) + '">'; }).join('');
     var lessons = enr ? lessonsFor(enr) : [];
     eState.hasLessons = lessons.length > 0;   // a new 신청서 (or one without lessons yet) always gets its lessons put on the calendar
@@ -1770,7 +1809,7 @@ body { margin: 0; }
   function eErr(m) { var e = $('#g-msg'); e.textContent = m; e.hidden = false; }
   function autofillFrom(name) {
     if (eState.editing || !name) return;
-    var prev = state.enrollments.filter(function (e) { return e.name === name; }).sort(function (a, b) { return b.month.localeCompare(a.month); })[0];
+    var prev = state.enrollments.filter(function (e) { return Members.norm(e.name) === Members.norm(name); }).sort(function (a, b) { return b.month.localeCompare(a.month); })[0];
     if (!prev) return;
     if (!$('#g-dong').value) $('#g-dong').value = prev.dong;
     if (!$('#g-ho').value) $('#g-ho').value = prev.ho;
@@ -1793,7 +1832,7 @@ body { margin: 0; }
     var gen = !eState.hasLessons;
     if (gen && !enr.days.length) return eErr('달력에 일정을 만들려면 강습 요일을 골라 주세요.');
     // same 동 + 호 and month already has a 신청서 (a family): share it (the first name stays), one lesson set per person
-    var person = enr.name, form = enr;
+    var form = enr;
     var same = eState.editing ? null : state.enrollments.find(function (e) { return e.dong === enr.dong && e.ho === enr.ho && e.month === enr.month; });
     if (same) {
       enr = Object.assign({}, same, { days: same.days.concat(form.days.filter(function (d) { return same.days.indexOf(d) < 0; })) });
@@ -1805,6 +1844,13 @@ body { margin: 0; }
       });
       if (Object.keys(sl).length) enr.slots = sl;
     }
+    var hk = enr.dong + '|' + enr.ho;
+    var cur = eState.editing && state.enrollments.find(function (e) { return e.id === eState.editing; });
+    // the person this form is for: when editing, the 신청서's own member; otherwise the member of the typed name (a new name becomes a new member)
+    var person = cur && cur.memberId && state.members.find(function (m) { return m.id === cur.memberId; }) || Members.ensure(memberData(), form.name, hk);
+    if (state.members.indexOf(person) < 0) state.members.push(person);
+    if (!same) enr.memberId = person.id;
+    enr.name = (state.members.find(function (m) { return m.id === enr.memberId; }) || person).name;
     enr.id = eState.editing || (same ? same.id : newId());
     // editing days/time/period: redo this person's unsigned lessons from today on, signed ones stay
     var old = eState.editing ? state.enrollments.find(function (e) { return e.id === enr.id; }) : null;
@@ -1813,18 +1859,18 @@ body { margin: 0; }
     var today = ymd(new Date());
     if (changed) {
       state.events = state.events.filter(function (x) {
-        return !(x.enrollmentId === enr.id && x.title === old.name && x.status === 'scheduled' && x.date >= today);
+        return !(x.enrollmentId === enr.id && memberOf(x) === memberOf(old) && x.status === 'scheduled' && x.date >= today);
       });
       gen = enr.days.length > 0;
     }
     var dates = gen ? genDates(form).filter(function (d) {
       if (changed && d < today) return false;
-      return !state.events.some(function (x) { return x.date === d && x.status !== 'cancelled' && x.title === person && (!x.enrollmentId || x.enrollmentId === enr.id); });
+      return !state.events.some(function (x) { return x.date === d && x.status !== 'cancelled' && memberOf(x) === person.id && (!x.enrollmentId || x.enrollmentId === enr.id); });
     }) : [];
     putEnr(enr);
     dates.forEach(function (d) {
       var t = slotOf(form, parse(d).getDay());
-      state.events.push({ id: newId(), title: person, date: d, start: t.start, end: t.end, memo: '', status: 'scheduled', enrollmentId: enr.id });
+      state.events.push({ id: newId(), title: person.name, memberId: person.id, date: d, start: t.start, end: t.end, memo: '', status: 'scheduled', enrollmentId: enr.id });
     });
     if (gen || changed) saveEvents();
     syncEnrFromLessons(enr.id);
@@ -2148,7 +2194,7 @@ body { margin: 0; }
   function closeBackup() { $('#backup').hidden = true; document.body.classList.remove('locked'); }
   async function exportBackup() {
     var name = 'lesson-calendar-' + ymd(new Date()) + '.json';
-    var text = JSON.stringify({ app: 'lesson-calendar', version: 2, exportedAt: new Date().toISOString(), events: state.events, enrollments: state.enrollments, settings: state.settings }, null, 2);
+    var text = JSON.stringify({ app: 'lesson-calendar', version: 3, exportedAt: new Date().toISOString(), events: state.events, enrollments: state.enrollments, members: state.members, settings: state.settings }, null, 2);
     var file = new File([text], name, { type: 'application/json' });
     try {
       if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: name }); backupMsg('공유 창에서 저장할 위치를 골라 주세요.', true); return; }
@@ -2172,6 +2218,7 @@ body { margin: 0; }
       good.forEach(function (e) {
         var o = { id: e.id, title: e.title, date: e.date, start: e.start, end: e.end, memo: e.memo || '', status: e.status || 'scheduled' };
         if (e.enrollmentId) o.enrollmentId = e.enrollmentId;
+        if (typeof e.memberId === 'string' && e.memberId) o.memberId = e.memberId;
         if (validSign(e.sign)) o.sign = e.sign;
         byId[e.id] = o;
       });
@@ -2187,6 +2234,12 @@ body { margin: 0; }
         state.settings.colors = Object.assign(cleanColors(data.settings.colors), state.settings.colors);
         saveSettings();
       }
+      if (data && Array.isArray(data.members)) {
+        var mById = {}; state.members.forEach(function (m) { mById[m.id] = m; });
+        data.members.filter(validMember).forEach(function (m) { if (!mById[m.id]) state.members.push({ id: m.id, name: m.name }); });
+      }
+      runMemberMigration();
+      applyMemberNames();
       syncAllEnrollments(true);
       lsSave(); saveEnr(); render();
       $('#backup-count').textContent = '저장된 수업 ' + state.events.length + '개 · 신청서 ' + state.enrollments.length + '건';
