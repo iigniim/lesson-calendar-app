@@ -187,6 +187,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .wkev b { font-size: 11px; font-weight: 600; }
 .wkev small, .wkev em { font-size: 9px; font-style: normal; color: var(--text); font-variant-numeric: tabular-nums; }
 .wk-hit { position: absolute; z-index: 0; left: 0; right: 0; height: calc(var(--wk-row) / 2); background: var(--accent-soft); pointer-events: none; }
+.wkev { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.wkev.drag-src { opacity: 0.35; }
+.wk-float { position: fixed; z-index: 60; margin: 0; pointer-events: none; outline: 1px solid var(--accent); }
 .wk-now { position: absolute; z-index: 3; left: 0; right: 0; height: 1px; background: var(--accent); pointer-events: none; }
 .wk-now::before { content: ""; position: absolute; left: -3px; top: -3px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
 
@@ -1261,12 +1264,76 @@ body { margin: 0; }
     setTimeout(wkHitClear, 350);
   });
   ['pointercancel', 'pointermove'].forEach(function (n) { $('#week').addEventListener(n, function (e) { if (n === 'pointercancel' || e.pointerType === 'touch') wkHitClear(); }); });
+  /* ---------- drag-and-move a lesson block: long-press, then drag (Pointer Events, no HTML5 DnD) ---------- */
+  var WK_HOLD = 350, WK_HOLD_MOUSE = 250, WK_SLOP = 8;   // ms to hold (touch / mouse), px of allowed wobble
+  var wkPress = null;       // pending long-press: { el, x, y, pid, type, timer }
+  var wkDrag = null;        // active drag: { el, fl, id, pid, gx, gy, cx, cy, raf }
+  var wkDragged = false;    // a drag happened in this gesture: no swipe, no click
+  var wkSuppress = false;
+  function wkPressClear() { if (wkPress) { clearTimeout(wkPress.timer); wkPress = null; } }
+  $('#week').addEventListener('pointerdown', function (e) {
+    wkDragged = false;
+    if (e.button > 0 || wkDrag) return;
+    var el = e.target.closest('.wkev');
+    wkPressClear();
+    if (!el) return;
+    wkPress = { el: el, x: e.clientX, y: e.clientY, pid: e.pointerId, type: e.pointerType, timer: setTimeout(wkDragStart, e.pointerType === 'mouse' ? WK_HOLD_MOUSE : WK_HOLD) };
+  });
+  document.addEventListener('pointermove', function (e) {
+    if (wkDrag) { if (e.pointerId === wkDrag.pid) { wkDrag.cx = e.clientX; wkDrag.cy = e.clientY; wkDragSchedule(); } return; }
+    if (!wkPress || e.pointerId !== wkPress.pid) return;
+    if (Math.hypot(e.clientX - wkPress.x, e.clientY - wkPress.y) > WK_SLOP) {
+      if (wkPress.type === 'mouse') wkDragStart(); else wkPressClear();   // touch: the finger is scrolling or swiping
+    }
+  });
+  ['pointerup', 'pointercancel'].forEach(function (n) {
+    document.addEventListener(n, function (e) {
+      if (wkDrag && e.pointerId === wkDrag.pid) wkDragEnd(n === 'pointerup');
+      else if (wkPress && e.pointerId === wkPress.pid) wkPressClear();
+    });
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && wkDrag) wkDragEnd(false); });
+  // once dragging, the page must not scroll under the finger (needs a non-passive listener on iOS)
+  document.addEventListener('touchmove', function (e) { if (wkDrag) e.preventDefault(); }, { passive: false });
+  // a drag ends with a click on some element: swallow it so it does not open the edit sheet
+  $('#week').addEventListener('click', function (e) { if (wkSuppress) { wkSuppress = false; e.stopPropagation(); e.preventDefault(); } }, true);
+  function wkDragStart() {
+    var p = wkPress; wkPressClear();
+    if (!p || !p.el.isConnected) return;
+    var r = p.el.getBoundingClientRect(), fl = p.el.cloneNode(true);
+    try { p.el.setPointerCapture(p.pid); } catch (err) {}
+    fl.removeAttribute('data-ev');
+    fl.classList.add('wk-float');
+    fl.style.top = '0'; fl.style.left = '0'; fl.style.width = r.width + 'px'; fl.style.height = r.height + 'px';
+    document.body.appendChild(fl);
+    p.el.classList.add('drag-src');
+    wkDrag = { el: p.el, fl: fl, id: p.el.getAttribute('data-ev'), pid: p.pid, gx: p.x - r.left, gy: p.y - r.top, cx: p.x, cy: p.y, raf: 0 };
+    wkDragged = true; wkMoved = true;
+    try { if (navigator.vibrate) navigator.vibrate(15); } catch (err) {}
+    wkDragFrame();
+  }
+  function wkDragSchedule() { if (wkDrag && !wkDrag.raf) wkDrag.raf = requestAnimationFrame(wkDragFrame); }
+  function wkDragFrame() {
+    if (!wkDrag) return;
+    wkDrag.raf = 0;
+    wkDrag.fl.style.transform = 'translate(' + (wkDrag.cx - wkDrag.gx) + 'px,' + (wkDrag.cy - wkDrag.gy) + 'px)';
+  }
+  function wkDragEnd(commit) {
+    var d = wkDrag; if (!d) return;
+    wkDrag = null;
+    cancelAnimationFrame(d.raf);
+    d.fl.remove();
+    d.el.classList.remove('drag-src');
+    try { d.el.releasePointerCapture(d.pid); } catch (err) {}
+    wkSuppress = true; setTimeout(function () { wkSuppress = false; }, 400);
+  }
   /* swipe left/right on the week grid to change week (mostly vertical moves are scrolling) */
   var wx = 0, wy = 0;
   $('#week').addEventListener('touchstart', function (e) { wx = e.touches[0].clientX; wy = e.touches[0].clientY; wkMoved = false; }, { passive: true });
   $('#week').addEventListener('touchend', function (e) {
     var dx = e.changedTouches[0].clientX - wx, dy = e.changedTouches[0].clientY - wy;
     wkMoved = Math.hypot(dx, dy) > 8;
+    if (wkDragged) return;   // the finger was dragging a lesson: not a swipe
     if (Math.abs(dx) > 60 && Math.abs(dx) > 1.5 * Math.abs(dy)) shiftWeek(dx < 0 ? 1 : -1);
   }, { passive: true });
   $('#today').addEventListener('click', function () {
