@@ -6,7 +6,7 @@
    - colors (settings.colors) are keyed by household "동|호", or "m:<memberId>" when there is no 동/호 */
 (function (root) {
   var clean = function (s) { return String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); };          // trim + collapse spaces
-  var norm = function (s) { return clean(s).normalize('NFC').toLowerCase(); };                          // for comparing names
+  var norm = function (s) { return clean(s).normalize('NFC').toLowerCase().replace(/\s+/g, ''); };       // for comparing names: case and all spacing ignored ("박 이안" = "박이안")
   var hhOf = function (enr) { return enr && enr.dong && enr.ho ? enr.dong + '|' + enr.ho : ''; };
   var rid = function (d) { return d.newId ? d.newId() : 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); };
 
@@ -112,20 +112,27 @@
     return n;
   }
 
-  /* Which 신청서 a moved lesson belongs to afterwards: the new member's own 신청서 of that month (same household as now preferred),
-     else the 신청서 the new member's other lessons of that month already sit on (a shared family 신청서), else none. */
+  /* The 신청서 a member is known from: their own, plus the ones their lessons sit on (a family member on a shared 신청서 has no own one). */
+  function knownEnrollments(d, toId, moving) {
+    var enrById = {}, seen = {}, list = [];
+    d.enrollments.forEach(function (x) { enrById[x.id] = x; });
+    function add(x) { if (x && !seen[x.id]) { seen[x.id] = true; list.push(x); } }
+    d.enrollments.forEach(function (x) { if (x.memberId === toId) add(x); });
+    d.events.forEach(function (x) { if (x.memberId === toId && !(moving && moving[x.id])) add(enrById[x.enrollmentId]); });
+    return list;
+  }
+
+  /* Which 신청서 a moved lesson belongs to afterwards: the new member's own 신청서 of that month, else the 신청서 of that month of a household
+     the member is already known from (a shared family 신청서), else none. A member with a 신청서 anywhere is never treated as new. */
   function enrollmentFor(d, e, toId, moving) {
     var month = e.date.slice(0, 7), cur = d.enrollments.filter(function (x) { return x.id === e.enrollmentId; })[0];
+    var known = knownEnrollments(d, toId, moving), hhs = {};
+    known.forEach(function (x) { if (hhOf(x)) hhs[hhOf(x)] = true; });
     var own = d.enrollments.filter(function (x) { return x.memberId === toId && x.month === month; });
     var pick = own.filter(function (x) { return cur && hhOf(x) === hhOf(cur); })[0] || own[0];
     if (pick) return pick.id;
-    var count = {}, best = null;
-    d.events.forEach(function (x) {
-      if (moving[x.id] || x.memberId !== toId || !x.enrollmentId || x.date.slice(0, 7) !== month) return;
-      count[x.enrollmentId] = (count[x.enrollmentId] || 0) + 1;
-      if (!best || count[x.enrollmentId] > count[best]) best = x.enrollmentId;
-    });
-    return best;
+    pick = known.filter(function (x) { return x.month === month; })[0] || d.enrollments.filter(function (x) { return x.month === month && hhs[hhOf(x)]; })[0];
+    return pick ? pick.id : null;
   }
 
   /* Give the lessons `ids` to member `toId`: memberId + title, and the 신청서 link follows the member (sheets, color and counts derive from it).
@@ -156,7 +163,7 @@
       if (!want[e.id] || e.enrollmentId) return;
       var month = e.date.slice(0, 7), enr = made.filter(function (x) { return x.month === month; })[0];
       if (!enr) {
-        var mine = d.enrollments.concat(made).filter(function (x) { return x.memberId === toId; });
+        var mine = knownEnrollments({ enrollments: d.enrollments.concat(made), events: d.events }, toId, null);
         var src = mine.filter(function (x) { return x.month <= month; }).sort(function (a, b) { return a.month < b.month ? 1 : -1; })[0] ||
           mine.sort(function (a, b) { return a.month < b.month ? -1 : 1; })[0];
         var y = +month.slice(0, 4), m = +month.slice(5), last = new Date(y, m, 0).getDate();

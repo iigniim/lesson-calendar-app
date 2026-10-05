@@ -85,6 +85,8 @@ assert.strictEqual(M.ensure(d, '김민지', '', { anyHousehold: true }).id.lengt
 // ---- corrupt / partial input never throws
 M.migrate({ events: [], enrollments: [], members: null, colors: null });
 M.migrate({ events: [{ id: 'x', title: '', date: '2026-10-01', memberId: 'ghost' }], enrollments: [{ id: 'y', month: '2026-10', name: 'k', memberId: 'ghost2' }], members: [{ id: 'bad' }], newId });
+assert.strictEqual(M.ensure(d, '김 가나나'.replace('김 가나나', '김가 나나'), 'A|101').id, kim.id);
+assert.strictEqual(M.ensure(d, '김가나나', 'A|101').id, kim.id, 'spacing inside the name does not make a new member');
 console.log('OK members');
 
 // ---- moveLessons: memberId + 신청서 link follow the new member
@@ -130,5 +132,17 @@ console.log('OK members');
   assert.strictEqual(made3[0].periodEnd, '2026-10-31');
   assert.ok(d2.events.filter((e) => e.memberId === 'm3').every((e) => e.enrollmentId === made3[0].id));
   assert.strictEqual(M.ensureEnrollments(d2, ['x2', 'x3'], 'm3').length, 0, 'second call creates nothing');
+  // ---- a family member who only sits on a shared 신청서 is not "new": link to that household's 신청서 of the month, create nothing
+  d2 = mk(); d2.members.push({ id: 'fam', name: '가족' });
+  d2.enrollments.push({ id: 'a11', month: '2026-11', name: '일번', dong: 'A', ho: '1', memberId: 'm1' });
+  d2.events.push({ id: 'f1', title: '가족', memberId: 'fam', date: '2026-10-08', enrollmentId: 'a10' }, { id: 'x4', title: '일번', memberId: 'm1', date: '2026-11-03', enrollmentId: 'a11' });
+  const enrBefore = d2.enrollments.length;
+  M.moveLessons(d2, ['x4'], 'fam'); const none = M.ensureEnrollments(d2, ['x4'], 'fam');
+  assert.strictEqual(d2.events.find((e) => e.id === 'x4').enrollmentId, 'a11', 'November lesson joins the household 신청서 of November');
+  assert.strictEqual(none.length, 0); assert.strictEqual(d2.enrollments.length, enrBefore, 'no new 신청서 for a known family member');
+  // ---- member with a 신청서 only in another month: a missing month copies that household (same color), never blank
+  d2 = mk(); M.moveLessons(d2, ['x3'], 'm2'); d2.events.push({ id: 'y9', title: '이번', memberId: 'm2', date: '2026-11-04' });
+  M.moveLessons(d2, ['y9'], 'm2'); const nov = M.ensureEnrollments(d2, ['y9'], 'm2');
+  assert.deepStrictEqual([nov[0].month, nov[0].dong, nov[0].ho], ['2026-11', 'B', '2']);
   console.log('OK moveLessons');
 }
