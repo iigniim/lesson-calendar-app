@@ -149,11 +149,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .wk-dh.sel { background: var(--accent-soft); }
 .wk-dh.sel .wn { color: var(--accent); }
 .wk-dh .lu, .wk-dh .hn { max-width: 100%; }
-/* lesson count: "3건", same look in Month cells (.dcount) and the Week footer */
-.dcount, .wk-foot span { font-size: 10px; line-height: 1.2; color: var(--text-muted); font-variant-numeric: tabular-nums; text-align: center; white-space: nowrap; }
-.day .dcount { margin-top: auto; }
-.day.today .dcount, .wk-foot .today { color: var(--accent); }
-.wk-foot { position: sticky; bottom: 0; z-index: 4; display: grid; grid-template-columns: 40px repeat(7, minmax(0, 1fr)); height: 22px; align-items: center; background: var(--surface); border-top: 1px solid var(--border); }
 .wk-body { position: relative; height: var(--wk-h); }
 .wk-body::before, .wk-body::after { content: ""; position: absolute; inset: 0; pointer-events: none; }
 .wk-body::before { background: linear-gradient(var(--border) 1px, transparent 1px) 0 0 / 100% var(--wk-row); }
@@ -634,7 +629,6 @@ body { margin: 0; }
     var l = getLunar(s);
     return l ? (l.isLeap ? '윤' : '') + l.month + '.' + l.day : '';
   }
-  function countText(n) { return n ? n + '건' : ''; }
   function lunarLeap(s) { var l = getLunar(s); return !!l && l.isLeap; }
   function lunarDay1(s) { var l = getLunar(s); return !!l && l.day === 1; }
   function lunarFull(s) {
@@ -894,7 +888,7 @@ body { margin: 0; }
       if (list.length > 2) chips += '<span class="more">+' + (list.length - 2) + '</span>';
       html += '<button type="button" class="' + cls + '" data-date="' + s + '" aria-label="' +
         (d.getMonth() + 1) + '월 ' + d.getDate() + '일 ' + WD[d.getDay()] + '요일, ' + (hol ? esc(hol) + ', ' : '') + (lunarFull(s) ? lunarFull(s) + ', ' : '') + '수업 ' + list.length + '개">' +
-        '<span class="nrow' + (lunarLeap(s) ? ' lp' : '') + '"><span class="n">' + d.getDate() + '</span><span class="lu' + (lunarDay1(s) ? ' m1' : '') + '">' + lunarShort(s) + '</span></span>' + (hol ? '<span class="hn">' + esc(hol) + '</span>' : '') + chips + (list.length ? '<span class="dcount">' + countText(list.length) + '</span>' : '') + '</button>';
+        '<span class="nrow' + (lunarLeap(s) ? ' lp' : '') + '"><span class="n">' + d.getDate() + '</span><span class="lu' + (lunarDay1(s) ? ' m1' : '') + '">' + lunarShort(s) + '</span></span>' + (hol ? '<span class="hn">' + esc(hol) + '</span>' : '') + chips + '</button>';
     }
     $('#days').innerHTML = html;
   }
@@ -989,8 +983,7 @@ body { margin: 0; }
       return '<div class="wk-col" data-date="' + days[i] + '">' + inner + (days[i] === todayS ? '<div class="wk-now" style="top:' + nowTop() + 'px"></div>' : '') + '</div>';
     }).join('') + '</div>';
     var keep = box.scrollTop, same = wkShown === first;
-    var foot = '<div class="wk-foot"><span></span>' + days.map(function (d, i) { return '<span' + (d === todayS ? ' class="today"' : '') + '>' + countText(cols[i].length) + '</span>'; }).join('') + '</div>';
-    box.innerHTML = head + body + foot;
+    box.innerHTML = head + body;
     wkShown = first;
     if (same) { box.scrollTop = keep; return; }
     // first open of this week: show the current time, else the first lesson, else 08:00
