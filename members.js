@@ -112,7 +112,40 @@
     return n;
   }
 
-  var api = { clean: clean, norm: norm, migrate: migrate, applyNames: applyNames, ensure: ensure, rename: rename, merge: merge, lessonCount: lessonCount };
+  /* Which 신청서 a moved lesson belongs to afterwards: the new member's own 신청서 of that month (same household as now preferred),
+     else the 신청서 the new member's other lessons of that month already sit on (a shared family 신청서), else none. */
+  function enrollmentFor(d, e, toId, moving) {
+    var month = e.date.slice(0, 7), cur = d.enrollments.filter(function (x) { return x.id === e.enrollmentId; })[0];
+    var own = d.enrollments.filter(function (x) { return x.memberId === toId && x.month === month; });
+    var pick = own.filter(function (x) { return cur && hhOf(x) === hhOf(cur); })[0] || own[0];
+    if (pick) return pick.id;
+    var count = {}, best = null;
+    d.events.forEach(function (x) {
+      if (moving[x.id] || x.memberId !== toId || !x.enrollmentId || x.date.slice(0, 7) !== month) return;
+      count[x.enrollmentId] = (count[x.enrollmentId] || 0) + 1;
+      if (!best || count[x.enrollmentId] > count[best]) best = x.enrollmentId;
+    });
+    return best;
+  }
+
+  /* Give the lessons `ids` to member `toId`: memberId + title, and the 신청서 link follows the member (sheets, color and counts derive from it).
+     Returns { moved, enrollmentIds } where enrollmentIds are the 신청서 whose lessons changed (old and new). */
+  function moveLessons(d, ids, toId) {
+    var to = d.members.filter(function (m) { return m.id === toId; })[0], moving = {}, touched = {}, moved = 0;
+    if (!to) return { moved: 0, enrollmentIds: [] };
+    ids.forEach(function (id) { moving[id] = true; });
+    d.events.forEach(function (e) {
+      if (!moving[e.id]) return;
+      if (e.enrollmentId) touched[e.enrollmentId] = true;
+      var link = enrollmentFor(d, e, toId, moving);
+      e.memberId = toId; e.title = to.name;
+      if (link) { e.enrollmentId = link; touched[link] = true; } else delete e.enrollmentId;
+      moved++;
+    });
+    return { moved: moved, enrollmentIds: Object.keys(touched) };
+  }
+
+  var api = { moveLessons: moveLessons, clean: clean, norm: norm, migrate: migrate, applyNames: applyNames, ensure: ensure, rename: rename, merge: merge, lessonCount: lessonCount };
   root.Members = api;
   if (typeof module !== 'undefined') module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

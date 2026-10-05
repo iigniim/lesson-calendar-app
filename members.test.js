@@ -86,3 +86,35 @@ assert.strictEqual(M.ensure(d, '김민지', '', { anyHousehold: true }).id.lengt
 M.migrate({ events: [], enrollments: [], members: null, colors: null });
 M.migrate({ events: [{ id: 'x', title: '', date: '2026-10-01', memberId: 'ghost' }], enrollments: [{ id: 'y', month: '2026-10', name: 'k', memberId: 'ghost2' }], members: [{ id: 'bad' }], newId });
 console.log('OK members');
+
+// ---- moveLessons: memberId + 신청서 link follow the new member
+{
+  const mk = () => ({
+    members: [{ id: 'm1', name: '일번' }, { id: 'm2', name: '이번' }],
+    enrollments: [
+      { id: 'a9', month: '2026-09', name: '일번', dong: 'A', ho: '1', memberId: 'm1' }, { id: 'a10', month: '2026-10', name: '일번', dong: 'A', ho: '1', memberId: 'm1' },
+      { id: 'b10', month: '2026-10', name: '이번', dong: 'B', ho: '2', memberId: 'm2' }
+    ],
+    events: [
+      { id: 'x1', title: '일번', memberId: 'm1', date: '2026-09-01', enrollmentId: 'a9', status: 'done', sign: 'M0 0' },
+      { id: 'x2', title: '일번', memberId: 'm1', date: '2026-10-06', enrollmentId: 'a10' },
+      { id: 'x3', title: '일번', memberId: 'm1', date: '2026-10-13', enrollmentId: 'a10' },
+      { id: 'y1', title: '이번', memberId: 'm2', date: '2026-10-07', enrollmentId: 'b10' }
+    ], colors: {}
+  });
+  let d2 = mk(), r2 = M.moveLessons(d2, ['x3'], 'm2');
+  assert.strictEqual(r2.moved, 1);
+  const x3 = d2.events.find((e) => e.id === 'x3');
+  assert.deepStrictEqual([x3.memberId, x3.title, x3.enrollmentId], ['m2', '이번', 'b10'], 'moved to the new member and their October 신청서');
+  assert.ok(r2.enrollmentIds.includes('a10') && r2.enrollmentIds.includes('b10'), 'old and new 신청서 are reported for syncing');
+  assert.strictEqual(d2.events.find((e) => e.id === 'x2').memberId, 'm1', 'other lessons stay');
+  d2 = mk(); M.moveLessons(d2, ['x1'], 'm2');      // September: the new member has no 신청서 that month -> unlinked, signature kept
+  const x1 = d2.events.find((e) => e.id === 'x1');
+  assert.ok(x1.memberId === 'm2' && !('enrollmentId' in x1) && x1.sign === 'M0 0' && x1.status === 'done');
+  d2 = mk(); M.moveLessons(d2, ['y1'], 'm1');      // back into a household's shared 신청서 of that month
+  assert.strictEqual(d2.events.find((e) => e.id === 'y1').enrollmentId, 'a10');
+  d2 = mk(); const cnt = d2.events.length; M.moveLessons(d2, d2.events.filter((e) => e.memberId === 'm1').map((e) => e.id), 'm2');
+  assert.strictEqual(d2.events.length, cnt, 'moving never drops lessons'); assert.ok(d2.events.every((e) => e.memberId === 'm2'));
+  assert.strictEqual(M.moveLessons(mk(), ['x2'], 'nobody').moved, 0);
+  console.log('OK moveLessons');
+}

@@ -512,6 +512,22 @@ body { margin: 0; }
   </div>
 </div>
 
+<div class="scrim" id="scopem" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="scopem-title">
+    <div class="grab"></div>
+    <h2 id="scopem-title">회원 변경</h2>
+    <p id="scopem-text"></p>
+    <p class="help">서명한 수업은 &apos;이후&apos; 선택에서 제외돼요.</p>
+    <div class="actions" style="flex-direction:column">
+      <button type="button" class="btn primary" id="scopem-one">이 수업만</button>
+      <button type="button" class="btn primary" id="scopem-week"></button>
+      <button type="button" class="btn primary" id="scopem-after"></button>
+      <button type="button" class="btn primary" id="scopem-all"></button>
+      <button type="button" class="btn" id="scopem-cancel">취소</button>
+    </div>
+  </div>
+</div>
+
 <div class="scrim" id="signm" hidden>
   <div class="panel" role="dialog" aria-modal="true" aria-labelledby="sign-title">
     <div class="grab"></div>
@@ -1147,8 +1163,18 @@ body { margin: 0; }
         var st = document.querySelector('input[name=status]:checked').value;
         var old = state.events.find(function (x) { return x.id === state.editing; }) || {};
         var oldEnr = old.enrollmentId && state.enrollments.find(function (x) { return x.id === old.enrollmentId; });
-        var mem = Members.ensure(memberData(), title, oldEnr ? (oldEnr.dong && oldEnr.ho ? oldEnr.dong + '|' + oldEnr.ho : '') : '', { anyHousehold: true });
-        if (state.members.indexOf(mem) < 0) state.members.push(mem);   // a name that matched no member becomes a new one
+        var snap = JSON.parse(JSON.stringify({ events: state.events, enrollments: state.enrollments, members: state.members, colors: state.settings.colors }));   // for undo
+        var md = memberData(); md.members = state.members.slice();   // a name that matches no member becomes a new member, but only once the save goes through
+        var mem = Members.ensure(md, title, oldEnr ? (oldEnr.dong && oldEnr.ho ? oldEnr.dong + '|' + oldEnr.ho : '') : '', { anyHousehold: true });
+        var memberChanged = !!old.id && old.memberId !== mem.id, scope = null;
+        if (memberChanged) {
+          // which lessons change member: this one, later same weekday, all later, or everything of the old member (same helper as the delete dialog)
+          var nWeek = lessonsFrom(old, { sameWeekday: true }).length, nAfter = lessonsFrom(old).length;
+          var nAll = state.events.filter(function (x) { return x.memberId === old.memberId; }).length;
+          scope = await askMemberScope(old, mem.name, nWeek, nAfter, nAll);
+          if (!scope) { $('#btn-save').disabled = false; return; }
+        }
+        state.members = md.members;
         var upd = { id: state.editing, title: mem.name, memberId: mem.id, date: date, start: start, end: end, memo: memo, status: st };
         if (old.enrollmentId) upd.enrollmentId = old.enrollmentId;
         if (old.sign && st === 'done') upd.sign = old.sign;
@@ -1163,7 +1189,20 @@ body { margin: 0; }
             after.forEach(function (x) { x.start = start; x.end = end; });
           }
         }
-        if (after.length) {
+        if (memberChanged) {
+          // one batch: this lesson's edit, any time change on later lessons, and the member change (memberId + 신청서 link) for the chosen scope
+          state.events[state.events.findIndex(function (x) { return x.id === upd.id; })] = upd;
+          var pick = scope === 'one' ? [old] : scope === 'week' ? lessonsFrom(old, { sameWeekday: true }) : scope === 'after' ? lessonsFrom(old)
+            : state.events.filter(function (x) { return x.memberId === old.memberId; });
+          var ids = pick.map(function (x) { return x.id; }); if (ids.indexOf(upd.id) < 0) ids.push(upd.id);
+          var mv = Members.moveLessons(memberData(), ids, mem.id);
+          lsSave();
+          mv.enrollmentIds.forEach(function (id) { syncEnrFromLessons(id); });
+          undoData = { snap: snap, done: '회원 변경을 되돌렸어요' };
+          $('#undo-text').textContent = mv.moved + '개 수업의 회원을 변경했어요';
+          $('#undo').hidden = false;
+          clearTimeout(undoTimer); undoTimer = setTimeout(function () { $('#undo').hidden = true; undoData = null; }, 5000);
+        } else if (after.length) {
           state.events[state.events.findIndex(function (x) { return x.id === upd.id; })] = upd;
           lsSave(); syncEnrFromLessons(old.enrollmentId);
           toast((after.length + 1) + '개 수업 시간을 바꿨어요');
@@ -1183,6 +1222,21 @@ body { margin: 0; }
     }
   }
 
+  // Scope of a member change: resolves 'one', 'week' (later same weekday), 'after' (all later), 'all' (every lesson of the old member) or null (cancel)
+  function askMemberScope(old, newName, nWeek, nAfter, nAll) {
+    $('#scopem-text').textContent = longDate(old.date) + ' ' + old.title + ' → ' + newName + ' 회원으로 바꿀 수업을 골라 주세요.';
+    $('#scopem-week').textContent = '이후 같은 요일(' + dowLetter(old.date) + ') 수업 (' + nWeek + '개)';
+    $('#scopem-after').textContent = '이후 모든 수업 (' + nAfter + '개)';
+    $('#scopem-all').textContent = "'" + old.title + "'의 모든 수업 (" + nAll + '개)';
+    $('#scopem-week').disabled = nWeek < 2; $('#scopem-after').disabled = nAfter < 2; $('#scopem-all').disabled = nAll < 2;   // a choice that would change only this lesson is off
+    $('#scopem').hidden = false;
+    return new Promise(function (resolve) {
+      function done(v) { $('#scopem').hidden = true; $('#scopem').onclick = null; ['one', 'week', 'after', 'all', 'cancel'].forEach(function (k) { $('#scopem-' + k).onclick = null; }); resolve(v); }
+      ['one', 'week', 'after', 'all'].forEach(function (k) { $('#scopem-' + k).onclick = function () { done(k); }; });
+      $('#scopem-cancel').onclick = function () { done(null); };
+      $('#scopem').onclick = function (e) { if (e.target === $('#scopem')) done(null); };
+    });
+  }
   // Resolves 'one', 'after' or null (cancel); n counts this lesson plus the following ones
   function askTimeChange(old, start, end, n) {
     $('#editm-text').textContent = longDate(old.date) + ' ' + old.title + ' 수업을 ' + old.start + '~' + old.end + ' → ' + start + '~' + end + '로 바꿀까요?';
@@ -1467,7 +1521,7 @@ body { margin: 0; }
   $('#add').addEventListener('click', function () { openEnr(null, state.tab === 'enr' ? null : state.selected); });
   $('#btn-close').addEventListener('click', closeSheet);
   $('#sheet').addEventListener('click', function (e) { if (e.target === $('#sheet')) closeSheet(); });
-  document.addEventListener('keydown', function (e) { if (e.key !== 'Escape') return; if (!$('#confm').hidden) $('#confm-no').click(); else if (!$('#editm').hidden) $('#editm-cancel').click(); else if (!$('#delm').hidden) $('#delm').hidden = true; else if (!$('#sheet').hidden) closeSheet(); });
+  document.addEventListener('keydown', function (e) { if (e.key !== 'Escape') return; if (!$('#confm').hidden) $('#confm-no').click(); else if (!$('#editm').hidden) $('#editm-cancel').click(); else if (!$('#scopem').hidden) $('#scopem-cancel').click(); else if (!$('#delm').hidden) $('#delm').hidden = true; else if (!$('#sheet').hidden) closeSheet(); });
   $('#form').addEventListener('submit', saveForm);
   $('#btn-del').addEventListener('click', removeCurrent);
   $('#f-start').addEventListener('input', function () {
@@ -1693,7 +1747,7 @@ body { margin: 0; }
     var d = undoData; undoData = null; $('#undo').hidden = true; clearTimeout(undoTimer);
     if (d.snap) {   // undo a member merge: restore everything exactly as it was
       state.events = d.snap.events; state.enrollments = d.snap.enrollments; state.members = d.snap.members; state.settings.colors = d.snap.colors;
-      saveAllMemberData(); render(); toast('합치기를 되돌렸어요');
+      saveAllMemberData(); render(); toast(d.done || '합치기를 되돌렸어요');
       return;
     }
     if (d.move) {   // undo a drag-move: put the lesson back exactly as it was
