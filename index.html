@@ -53,7 +53,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* header */
 .head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
 .head-l { min-width: 0; }
-.month { font-family: var(--f-display); font-size: 30px; line-height: 1.1; margin: 0; letter-spacing: 0.01em; }
+.month { font-family: var(--f-display); font-size: 30px; line-height: 1.1; margin: 0; letter-spacing: 0.01em; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 380px) { .month { font-size: 26px; } .head { gap: 8px; } .head-r { gap: 4px; } }
 .sync { margin: 2px 0 0; font-size: 12px; color: var(--text-muted); }
 .sync.warn { color: var(--accent); }
 .head-r { display: flex; gap: 6px; align-items: center; }
@@ -107,7 +108,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .agenda-h h2 { font-family: var(--f-display); font-size: 21px; font-weight: 400; margin: 0; }
 .agenda-h h2 .tag { font-family: var(--f-body); font-size: 11px; font-weight: 600; background: var(--accent); color: var(--on-accent); padding: 2px 7px; border-radius: 4px; margin-left: 6px; vertical-align: 3px; }
 .agenda-h h2 .htag { font-family: var(--f-body); font-size: 11px; font-weight: 600; color: var(--accent); border: 1px solid var(--accent); padding: 1px 6px; border-radius: 4px; margin-left: 6px; white-space: nowrap; vertical-align: 3px; }
-.agenda-h p { margin: 0; font-size: 13px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.agenda-h h2 { min-width: 0; }
+.agenda-h p { flex: none; white-space: nowrap; margin: 0; font-size: 13px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .lesson { display: flex; align-items: stretch; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
 .lesson-main { flex: 1; min-width: 0; display: flex; gap: 12px; align-items: center; text-align: left; background: none; border: 0; padding: 12px 8px 12px 12px; }
@@ -141,7 +143,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .wk-scroll { height: min(64vh, 600px); min-height: 320px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; position: relative; }
 .wk-head, .wk-body { display: grid; grid-template-columns: 40px repeat(7, minmax(0, 1fr)); }
 .wk-head { position: sticky; top: 0; z-index: 4; background: var(--surface); border-bottom: 1px solid var(--border); }
-.wk-dh { min-width: 0; height: 64px; padding: 4px 1px 2px; border: 0; border-left: 1px solid var(--border); background: transparent; display: flex; flex-direction: column; align-items: center; gap: 1px; }
+.wk-dh { min-width: 0; min-height: 64px; padding: 4px 1px 2px; border: 0; border-left: 1px solid var(--border); background: transparent; display: flex; flex-direction: column; align-items: center; gap: 1px; }
 .wk-dh .wd { font-size: 11px; line-height: 1.2; color: var(--text-muted); }
 .wk-dh .wn { min-width: 20px; height: 20px; padding: 0 2px; display: grid; place-items: center; border-radius: 50%; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .wk-dh.c0 .wn, .wk-dh.hol .wn { color: var(--accent); }
@@ -186,7 +188,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .dock { position: fixed; z-index: 5; left: 0; right: 0; bottom: 0; background: var(--bg); border-top: 1px solid var(--border); padding: 8px 16px calc(8px + env(safe-area-inset-bottom, 0px)); }
 .dock-in { max-width: 560px; margin-inline: auto; display: flex; align-items: center; gap: 12px; }
 .fab {
-  flex: 1; min-width: 0; height: 48px; padding: 0 18px; border-radius: 6px; border: 0;
+  flex: 1; min-width: 0; min-height: 48px; padding: 0 18px; border-radius: 6px; border: 0;
   background: var(--accent); color: var(--on-accent); font-weight: 600; font-size: 16px;
   display: flex; align-items: center; justify-content: center; gap: 8px;
 }
@@ -233,11 +235,13 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 .btn:disabled { opacity: 0.55; }
 
 .upd { bottom: calc(140px + env(safe-area-inset-bottom, 0px)); z-index: 41; display: flex; align-items: center; gap: 10px; border-radius: 6px; }
-.upd button { min-height: 40px; padding: 0 14px; border: 0; border-radius: 4px; background: var(--bg); color: var(--text); font: inherit; font-weight: 600; }
+.upd span { flex: 1; min-width: 0; overflow-wrap: anywhere; word-break: keep-all; }
+.upd button { flex: none; white-space: nowrap; min-height: 40px; padding: 0 14px; border: 0; border-radius: 4px; background: var(--bg); color: var(--text); font: inherit; font-weight: 600; }
 .toast {
   position: fixed; z-index: 40; left: 50%; transform: translateX(-50%);
   bottom: calc(88px + env(safe-area-inset-bottom, 0px));
   background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 4px; font-size: 14px; font-weight: 500; max-width: calc(100% - 32px);
+  width: max-content; overflow-wrap: anywhere; word-break: keep-all;   /* width: max-content, or left: 50% would squeeze the toast into half the screen */
 }
 
 html { background: var(--bg); padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
@@ -254,7 +258,7 @@ body { margin: 0; }
 .tabs button[aria-selected="true"] { background: var(--accent); color: var(--on-accent); }
 .enr-sum { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; padding-inline: 2px; }
 .enr-actions { display: flex; gap: 8px; }
-.enr-actions .btn { min-height: 46px; }
+.enr-actions .btn { flex: 1 1 auto; min-width: 0; min-height: 46px; padding: 6px 8px; font-size: 14px; line-height: 1.25; }
 .enr { display: flex; align-items: stretch; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
 .enr-main { flex: 1; min-width: 0; display: flex; gap: 12px; align-items: center; text-align: left; background: none; border: 0; padding: 12px 8px 12px 12px; }
 .unit { flex: none; width: 50px; font-weight: 600; font-size: 14px; line-height: 1.25; font-variant-numeric: tabular-nums; }
@@ -398,9 +402,9 @@ body { margin: 0; }
   <div id="view-enr" class="view" hidden>
     <p class="enr-sum" id="enr-sum"></p>
     <div class="enr-actions">
-      <button type="button" class="btn primary" id="btn-summary" style="flex:2">강습신청 현황 출력</button>
-      <button type="button" class="btn" id="btn-copy" style="flex:1.3">지난달 신청 복사</button>
-      <button type="button" class="btn" id="btn-select" style="flex:0.8">선택</button>
+      <button type="button" class="btn primary" id="btn-summary">강습신청 현황 출력</button>
+      <button type="button" class="btn" id="btn-copy">지난달 신청 복사</button>
+      <button type="button" class="btn" id="btn-select">선택</button>
     </div>
     <ul class="list" id="enr-list"></ul>
   </div>
