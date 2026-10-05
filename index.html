@@ -149,6 +149,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .wk-dh.sel { background: var(--accent-soft); }
 .wk-dh.sel .wn { color: var(--accent); }
 .wk-dh .lu, .wk-dh .hn { max-width: 100%; }
+.mtotal { margin: 0; padding: 8px 12px; border-top: 1px solid var(--border); font-size: 12px; line-height: 1.3; color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mtotal b { font-weight: 400; color: var(--text); }
+.cal .mtotal { margin: 8px -6px -10px; }
 .wk-body { position: relative; height: var(--wk-h); }
 .wk-body::before, .wk-body::after { content: ""; position: absolute; inset: 0; pointer-events: none; }
 .wk-body::before { background: linear-gradient(var(--border) 1px, transparent 1px) 0 0 / 100% var(--wk-row); }
@@ -370,9 +373,10 @@ body { margin: 0; }
   <section class="cal" id="cal" aria-label="월간 달력">
     <div class="dow" aria-hidden="true"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
     <div class="days" id="days"></div>
+    <p class="mtotal" id="mtotal-m"></p>
   </section>
 
-  <section class="wk" id="week" aria-label="주간 달력" hidden><div class="wk-scroll" id="wk-scroll"></div></section>
+  <section class="wk" id="week" aria-label="주간 달력" hidden><div class="wk-scroll" id="wk-scroll"></div><p class="mtotal" id="mtotal-w"></p></section>
 
   <section id="agenda" aria-live="polite">
     <div class="agenda-h"><h2 id="a-title"></h2><p id="a-count"></p></div>
@@ -628,6 +632,11 @@ body { margin: 0; }
   function lunarShort(s) {
     var l = getLunar(s);
     return l ? (l.isLeap ? '윤' : '') + l.month + '.' + l.day : '';
+  }
+  /* "10월 수업 총 12개": every non-cancelled lesson dated in that month (past or done included) */
+  function monthTotalHtml(d) {
+    var key = monthKey(d), n = state.events.filter(function (e) { return e.status !== 'cancelled' && e.date.slice(0, 7) === key; }).length;
+    return (d.getMonth() + 1) + '월 수업 총 <b>' + n + '</b>개';
   }
   function lunarLeap(s) { var l = getLunar(s); return !!l && l.isLeap; }
   function lunarDay1(s) { var l = getLunar(s); return !!l && l.day === 1; }
@@ -1005,6 +1014,8 @@ body { margin: 0; }
     var wk = isWeek();
     $('#cal').hidden = wk; $('#agenda').hidden = wk; $('#week').hidden = !wk;
     renderWeek();   // after unhiding: a hidden box cannot be scrolled
+    $('#mtotal-m').innerHTML = monthTotalHtml(state.month);
+    $('#mtotal-w').innerHTML = monthTotalHtml(parse(addDays(weekStartOf(state.selected), 3)));
     document.querySelectorAll('.vseg [data-view]').forEach(function (b) { b.setAttribute('aria-selected', String(b.getAttribute('data-view') === state.view)); });
   }
 
