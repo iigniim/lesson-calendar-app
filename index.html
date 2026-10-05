@@ -41,7 +41,7 @@ body {
   font-size: 15px;
   line-height: 1.45;
   padding-inline: 16px;
-  padding-block: 12px 110px;
+  padding-block: 12px calc(96px + env(safe-area-inset-bottom, 0px));
   -webkit-tap-highlight-color: transparent;
 }
 body.locked { overflow: hidden; }
@@ -106,7 +106,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .agenda-h { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding-inline: 2px; }
 .agenda-h h2 { font-family: var(--f-display); font-size: 21px; font-weight: 400; margin: 0; }
 .agenda-h h2 .tag { font-family: var(--f-body); font-size: 11px; font-weight: 600; background: var(--accent); color: var(--on-accent); padding: 2px 7px; border-radius: 4px; margin-left: 6px; vertical-align: 3px; }
-.agenda-h h2 .htag { font-family: var(--f-body); font-size: 11px; font-weight: 600; color: var(--accent); border: 1px solid var(--accent); padding: 1px 6px; border-radius: 4px; margin-left: 6px; vertical-align: 3px; }
+.agenda-h h2 .htag { font-family: var(--f-body); font-size: 11px; font-weight: 600; color: var(--accent); border: 1px solid var(--accent); padding: 1px 6px; border-radius: 4px; margin-left: 6px; white-space: nowrap; vertical-align: 3px; }
 .agenda-h p { margin: 0; font-size: 13px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .lesson { display: flex; align-items: stretch; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
@@ -132,12 +132,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .empty b { display: block; color: var(--text); font-size: 15px; margin-bottom: 2px; }
 
 /* view toggle + week view */
-.vseg { display: flex; align-self: flex-end; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
-.vseg button { min-height: 40px; padding: 0 16px; border: 0; background: none; color: var(--text-muted); font-weight: 600; font-size: 14px; }
+.vseg { flex: none; display: flex; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+.vseg button { min-height: 48px; min-width: 56px; padding: 0 16px; border: 0; background: none; color: var(--text-muted); font-weight: 600; font-size: 14px; }
 .vseg button + button { border-left: 1px solid var(--border); }
 .vseg button[aria-selected="true"] { background: var(--surface-2); color: var(--accent); }
 .month.wk-title { font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.agenda-r { display: flex; align-items: baseline; gap: 12px; }
 .wk { --wk-row: 52px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; touch-action: pan-y; }
 .wk-scroll { height: min(64vh, 600px); min-height: 320px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; position: relative; }
 .wk-head, .wk-body { display: grid; grid-template-columns: 40px repeat(7, minmax(0, 1fr)); }
@@ -170,14 +169,15 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .wk-now { position: absolute; z-index: 3; left: 0; right: 0; height: 1px; background: var(--accent); pointer-events: none; }
 .wk-now::before { content: ""; position: absolute; left: -3px; top: -3px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
 
-/* add button */
+/* bottom bar: view toggle on the left, add button on the right (flat, one-thumb reach) */
+.dock { position: fixed; z-index: 5; left: 0; right: 0; bottom: 0; background: var(--bg); border-top: 1px solid var(--border); padding: 8px 16px calc(8px + env(safe-area-inset-bottom, 0px)); }
+.dock-in { max-width: 560px; margin-inline: auto; display: flex; align-items: center; gap: 12px; }
 .fab {
-  position: fixed; z-index: 5; right: max(16px, calc(50% - 280px + 16px));
-  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
-  height: 56px; padding: 0 22px 0 18px; border-radius: 6px; border: 0;
+  flex: 1; min-width: 0; height: 48px; padding: 0 18px; border-radius: 6px; border: 0;
   background: var(--accent); color: var(--on-accent); font-weight: 600; font-size: 16px;
-  display: flex; align-items: center; gap: 8px; 
+  display: flex; align-items: center; justify-content: center; gap: 8px;
 }
+.fab:hover { background: var(--accent-hover); }
 .fab svg { width: 20px; height: 20px; stroke: var(--on-accent); fill: none; stroke-width: 1.5; stroke-linecap: round; }
 
 /* sheet */
@@ -257,7 +257,7 @@ body { margin: 0; }
 .selbar { position: fixed; z-index: 6; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 10px; padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px)); background: var(--surface); border-top: 1px solid var(--border); }
 .selbar .btn { flex: none; min-height: 48px; padding: 0 14px; }
 .selbar span { flex: 1; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; }
-.selecting .fab { display: none; }
+.selecting .dock { display: none; }
 .selecting #enr-list { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
 .selbox { flex: none; width: 28px; height: 28px; border: 2px solid var(--text-muted); border-radius: 4px; display: grid; place-items: center; font-size: 18px; line-height: 1; font-weight: 700; }
 .selbox.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
@@ -367,7 +367,6 @@ body { margin: 0; }
   <nav class="tabs" role="tablist" aria-label="화면 선택"><button type="button" role="tab" data-tab="cal" aria-selected="true">달력</button><button type="button" role="tab" data-tab="enr" aria-selected="false">신청·출력</button></nav>
 
   <div id="view-cal" class="view">
-  <div class="vseg" role="tablist" aria-label="보기 방식"><button type="button" role="tab" data-view="month" aria-selected="true">월간</button><button type="button" role="tab" data-view="week" aria-selected="false">주간</button></div>
   <section class="cal" id="cal" aria-label="월간 달력">
     <div class="dow" aria-hidden="true"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
     <div class="days" id="days"></div>
@@ -376,7 +375,7 @@ body { margin: 0; }
   <section class="wk" id="week" aria-label="주간 달력" hidden><div class="wk-scroll" id="wk-scroll"></div></section>
 
   <section id="agenda" aria-live="polite">
-    <div class="agenda-h"><h2 id="a-title"></h2><div class="agenda-r"><p id="a-count"></p><button type="button" class="linkbtn" id="to-week">주간 보기</button></div></div>
+    <div class="agenda-h"><h2 id="a-title"></h2><p id="a-count"></p></div>
     <ul class="list" id="list" style="margin-top:10px"></ul>
   </section>
   </div>
@@ -392,7 +391,10 @@ body { margin: 0; }
   </div>
 </main>
 
+<div class="dock"><div class="dock-in">
+<div class="vseg" role="tablist" aria-label="보기 방식"><button type="button" role="tab" data-view="month" aria-selected="true">월간</button><button type="button" role="tab" data-view="week" aria-selected="false">주간</button></div>
 <button class="fab" id="add" type="button"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span id="add-label">수업 추가</span></button>
+</div></div>
 
 <div class="scrim" id="sheet" hidden>
   <form class="panel" id="form" role="dialog" aria-modal="true" aria-labelledby="sheet-title" novalidate>
@@ -1213,7 +1215,6 @@ body { margin: 0; }
   $('#prev').addEventListener('click', function () { shiftView(-1); });
   $('#next').addEventListener('click', function () { shiftView(1); });
   document.querySelectorAll('.vseg [data-view]').forEach(function (b) { b.addEventListener('click', function () { setView(b.getAttribute('data-view')); }); });
-  $('#to-week').addEventListener('click', function () { setView('week'); });
   $('#week').addEventListener('click', function (e) {
     var ev = e.target.closest('[data-ev]');
     if (ev) { var x = state.events.find(function (z) { return z.id === ev.getAttribute('data-ev'); }); if (x) openSheet(x); return; }
@@ -1405,6 +1406,7 @@ body { margin: 0; }
     document.querySelectorAll('.tabs button').forEach(function (b) {
       b.setAttribute('aria-selected', String(b.getAttribute('data-tab') === state.tab));
     });
+    $('.vseg').hidden = state.tab !== 'cal';
     $('#add-label').textContent = state.tab === 'cal' ? '수업 추가' : '신청서 추가';
   }
   // signed, but the signed lesson count or fee has changed since
