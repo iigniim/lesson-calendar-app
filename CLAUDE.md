@@ -65,6 +65,8 @@ The worker installs with `cache: 'reload'`, navigations use `cache: 'no-store'` 
 
 ## UI conventions
 
+- Sizes are fluid: `--u` (clamp on viewport width + rem, 14-18px) is the base unit; write sizes as `calc(var(--u) * px/16)` (1-2px borders stay px). Interactive controls use `max(44px, ...)`, inputs `max(16px, var(--u))` (no iOS zoom). Page width `--page` 1180px, lists/forms/dialogs `--reading` 720px centered. Month cells use `aspect-ratio: 5/7`; the Week hour row is `--wk-row` and JS measures it (`syncWkRow`) and redraws on resize/rotation.
+
 - UI text is Korean. Code, comments and identifiers are English.
 - Colors are CSS tokens on `:root` with a dark-mode override. Never hard-code a color in a component rule (the `.paper` print styles are the one exception).
 - Inputs use `font-size: 16px` so iOS does not zoom. Tap targets are at least 40px.
