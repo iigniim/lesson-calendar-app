@@ -79,6 +79,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   min-width: 0; min-height: 66px; border: 1px solid transparent; background: transparent;
   border-radius: 4px; padding: 4px 1px 3px; display: flex; flex-direction: column; align-items: stretch; gap: 3px; text-align: left;
 }
+.day { touch-action: manipulation; }   /* no double-tap zoom on dates */
 .day .nrow { display: flex; align-items: center; justify-content: center; gap: 1px; min-width: 0; overflow: hidden; white-space: nowrap; }
 .day .lu, .wk-dh .lu { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 9px; font-weight: 400; line-height: 1; letter-spacing: -0.03em; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .day .lu.m1, .wk-dh .lu.m1 { color: var(--text); }
@@ -1501,6 +1502,27 @@ body { margin: 0; }
     if (d.getMonth() !== state.month.getMonth()) state.month = new Date(d.getFullYear(), d.getMonth(), 1);
     render();
   });
+  /* double-tap / double-click a date: open the add form for that day. The single tap above stays immediate;
+     detection is manual (pointer events): second tap on the same cell within 300ms and 20px, neither tap moved more than 8px (scroll/swipe is not a tap). */
+  var dtapDown = null, dtapLast = null;
+  $('#days').addEventListener('pointerdown', function (e) {
+    var b = e.target.closest('[data-date]');
+    dtapDown = b && !e.target.closest('.chip') ? { date: b.getAttribute('data-date'), out: b.classList.contains('out'), x: e.clientX, y: e.clientY } : null;   // a lesson chip is not a date tap
+    if (!dtapDown) dtapLast = null;
+  });
+  $('#days').addEventListener('pointerup', function (e) {
+    var p = dtapDown; dtapDown = null;
+    if (!p) return;
+    var b = e.target.closest('[data-date]');
+    if (!b || b.getAttribute('data-date') !== p.date || Math.hypot(e.clientX - p.x, e.clientY - p.y) > 8) { dtapLast = null; return; }
+    // a tap on a greyed date of the next/previous month switches the month, so the second tap lands on another cell at the same spot: that still counts for the first date
+    if (dtapLast && (dtapLast.date === p.date || dtapLast.out) && e.timeStamp - dtapLast.t < 300 && Math.hypot(e.clientX - dtapLast.x, e.clientY - dtapLast.y) < 20) {
+      var date = dtapLast.date; dtapLast = null;
+      state.selected = date;
+      openEnr(null, date);
+    } else dtapLast = { date: p.date, out: p.out, t: e.timeStamp, x: e.clientX, y: e.clientY };
+  });
+  $('#days').addEventListener('pointercancel', function () { dtapDown = null; dtapLast = null; });
   $('#list').addEventListener('click', async function (e) {
     var t = e.target.closest('[data-toggle]');
     if (t) {
