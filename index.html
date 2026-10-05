@@ -25,6 +25,7 @@
   --text-muted: #8C8C91;
   --accent: #D62828;
   --accent-hover: #B81F1F;
+  --accent-text: #F26065;   /* red for small text on dark: 5.2:1+ on every surface (--accent itself is 3.9:1, for fills and large type) */
   --accent-soft: rgba(214, 40, 40, 0.14);
   --on-accent: #FFFFFF;
   --scrim: rgba(0, 0, 0, 0.6);
@@ -57,7 +58,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .month { font-family: var(--f-display); font-size: 30px; line-height: 1.2; margin: 0; letter-spacing: 0.01em; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 380px) { .month { font-size: 26px; } .head { gap: 8px; } .head-r { gap: 4px; } }
 .sync { margin: 2px 0 0; font-size: 12px; color: var(--text-muted); }
-.sync.warn { color: var(--accent); }
+.sync.warn { color: var(--accent-text); }
 .head-r { display: flex; gap: 6px; align-items: center; }
 .ibtn {
   width: 40px; height: 40px; border-radius: 6px; border: 1px solid var(--border);
@@ -71,7 +72,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .dow, .days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
 .dow { padding-bottom: 4px; }
 .dow span { text-align: center; font-size: 12px; font-weight: 600; color: var(--text-muted); padding: 4px 0; }
-.dow span:first-child { color: var(--accent); }
+.dow span:first-child { color: var(--accent-text); }
 .dow span:last-child { color: var(--text-muted); }
 .days { gap: 2px; }
 .day {
@@ -87,12 +88,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
 @media (max-width: 340px) { .day .lu { display: none; } }
 .agenda-h h2 .lfull { font-family: var(--f-body); font-size: 12px; font-weight: 400; color: var(--text-muted); margin-left: 6px; }
 .day .n { flex: none; font-size: 13px; font-weight: 600; min-width: 20px; height: 20px; padding: 0 2px; display: grid; place-items: center; border-radius: 50%; font-variant-numeric: tabular-nums; }
-.day.c0 .n, .day.hol .n { color: var(--accent); }
-.day .hn, .wk-dh .hn { font-size: 10px; line-height: 1.1; color: var(--accent); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.day.c0 .n, .day.hol .n { color: var(--accent-text); }
+.day .hn, .wk-dh .hn { font-size: 10px; line-height: 1.1; color: var(--accent-text); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .day.c6 .n { color: var(--text-muted); }
-.day.out { opacity: 0.38; }
+.day.out .n, .day.out .lu { color: var(--text-muted); }   /* adjacent-month days: muted text, not opacity (opacity broke AA contrast) */
+.day.out .chip, .day.out .hn { opacity: 0.6; }
 .day.sel { background: var(--accent-soft); border-color: transparent; }
-.day.sel .n { color: var(--accent); }
+.day.sel .n { color: var(--accent-text); }
 .day.today .n { box-shadow: inset 0 0 0 1px var(--accent); }
 .chip {
   display: block; min-width: 0; font-size: 10px; line-height: 1.25; padding: 1px 3px; border-radius: 4px;
@@ -108,7 +110,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .agenda-h { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding-inline: 2px; }
 .agenda-h h2 { font-family: var(--f-display); font-size: 21px; font-weight: 400; margin: 0; }
 .agenda-h h2 .tag { font-family: var(--f-body); font-size: 11px; font-weight: 600; background: var(--accent); color: var(--on-accent); padding: 2px 7px; border-radius: 4px; margin-left: 6px; vertical-align: 3px; }
-.agenda-h h2 .htag { font-family: var(--f-body); font-size: 11px; font-weight: 600; color: var(--accent); border: 1px solid var(--accent); padding: 1px 6px; border-radius: 4px; margin-left: 6px; white-space: nowrap; vertical-align: 3px; }
+.agenda-h h2 .htag { font-family: var(--f-body); font-size: 11px; font-weight: 600; color: var(--accent-text); border: 1px solid var(--accent); padding: 1px 6px; border-radius: 4px; margin-left: 6px; white-space: nowrap; vertical-align: 3px; }
 .agenda-h h2 { min-width: 0; }
 .agenda-h p { flex: none; white-space: nowrap; margin: 0; font-size: 13px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
@@ -138,7 +140,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .vseg { flex: none; display: flex; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
 .vseg button { min-height: 48px; min-width: 56px; padding: 0 16px; border: 0; background: none; color: var(--text-muted); font-weight: 600; font-size: 14px; }
 .vseg button + button { border-left: 1px solid var(--border); }
-.vseg button[aria-selected="true"] { background: var(--surface-2); color: var(--accent); }
+.vseg button[aria-selected="true"] { background: var(--surface-2); color: var(--accent-text); }
 .month.wk-title { font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wk { --wk-row: 52px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; touch-action: pan-y; }
 .wk-scroll { height: min(64vh, 600px); min-height: 320px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; position: relative; }
@@ -147,10 +149,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .wk-dh { min-width: 0; min-height: 64px; padding: 4px 1px 2px; border: 0; border-left: 1px solid var(--border); background: transparent; display: flex; flex-direction: column; align-items: center; gap: 1px; }
 .wk-dh .wd { font-size: 11px; line-height: 1.2; color: var(--text-muted); }
 .wk-dh .wn { min-width: 20px; height: 20px; padding: 0 2px; display: grid; place-items: center; border-radius: 50%; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.wk-dh.c0 .wn, .wk-dh.hol .wn { color: var(--accent); }
+.wk-dh.c0 .wn, .wk-dh.hol .wn { color: var(--accent-text); }
 .wk-dh.today .wn { box-shadow: inset 0 0 0 1px var(--accent); }
 .wk-dh.sel { background: var(--accent-soft); }
-.wk-dh.sel .wn { color: var(--accent); }
+.wk-dh.sel .wn { color: var(--accent-text); }
 .wk-dh .lu, .wk-dh .hn { max-width: 100%; }
 .mtotal { margin: 0; padding: 8px 12px; border-top: 1px solid var(--border); font-size: 12px; line-height: 1.3; color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
 .mtotal b { font-weight: 400; color: var(--text); }
@@ -160,8 +162,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .wk-sum th, .wk-sum td { padding: 0; text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .wk-sum th { padding: 11px 0 5px; font-size: 11px; font-weight: 400; line-height: 1.2; color: var(--text-muted); border-bottom: 1px solid var(--border); }
 .wk-sum td { padding: 6px 0 11px; font-size: 14px; line-height: 1.3; color: var(--text); }
-.wk-sum .red { color: var(--accent); }
-.wk-sum th.today, .wk-sum td.today { color: var(--accent); }
+.wk-sum .red { color: var(--accent-text); }
+.wk-sum th.today, .wk-sum td.today { color: var(--accent-text); }
 .wk-sum td.zero { color: var(--text-muted); }
 .wk-sum .tot { border-left: 1px solid var(--border); }
 .wk-sum td.tot { font-weight: 600; }
@@ -230,11 +232,11 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 .seg input:checked + span { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
 .seg input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
 .note { margin: 0; font-size: 13px; padding: 8px 10px; border-radius: 4px; background: var(--accent-soft); }
-.err { margin: 0; font-size: 13px; color: var(--accent); font-weight: 500; }
+.err { margin: 0; font-size: 13px; color: var(--accent-text); font-weight: 500; }
 .actions { display: flex; gap: 8px; margin-top: 4px; }
 .btn { flex: 1; min-height: 48px; border-radius: 4px; border: 1px solid var(--border); background: transparent; font-weight: 600; font-size: 15px; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); flex: 2; }
-.btn.danger { color: var(--accent); border-color: var(--accent); flex: 1; }
+.btn.danger { color: var(--accent-text); border-color: var(--accent); flex: 1; }
 .btn.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
 .btn:disabled { opacity: 0.55; }
 
@@ -251,7 +253,7 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 html { background: var(--bg); padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
 body { margin: 0; }
 [hidden] { display: none !important; }
-.linkbtn { background: none; border: 0; padding: 0; color: var(--accent); font-size: 12px; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--accent-text); font-size: 12px; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
 .help { margin: 0; font-size: 13px; color: var(--text-muted); }
 .stack { display: flex; flex-direction: column; gap: 8px; }
 
@@ -271,7 +273,7 @@ body { margin: 0; }
 .pill.warn { background: var(--border); color: var(--text-muted); }
 .csign { flex: none; width: 76px; padding: 4px; background: none; border: 0; border-left: 1px solid var(--border); color: var(--text-muted); font: inherit; font-size: 12px; font-weight: 600; line-height: 1.3; }
 .csign.ok { color: var(--text-muted); }
-.csign.stale { color: var(--accent); }
+.csign.stale { color: var(--accent-text); }
 .paper .sum .sig { height: 9mm; }
 .prt { flex: none; width: 56px; background: none; border: 0; border-left: 1px solid var(--border); display: grid; place-items: center; }
 .prt svg { width: 22px; height: 22px; stroke: var(--text); fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
@@ -343,7 +345,7 @@ body { margin: 0; }
 .scard { display: grid; gap: 10px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); }
 .crow { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .crow span { font-size: 18px; font-weight: 600; color: var(--text); }
-.crow b { font-size: 32px; font-weight: 700; line-height: 1.2; color: var(--accent); font-variant-numeric: tabular-nums; }
+.crow b { font-size: 32px; font-weight: 700; line-height: 1.2; color: var(--accent-text); font-variant-numeric: tabular-nums; }
 .padbox { position: relative; }
 .padhint { position: absolute; inset: 0; display: grid; place-items: center; font-size: 20px; color: var(--text-muted); pointer-events: none; }
 .sactions { display: flex; flex-direction: column; gap: 18px; margin-top: 4px; }
@@ -425,7 +427,7 @@ body { margin: 0; }
 <div class="scrim" id="sheet" hidden>
   <form class="panel" id="form" role="dialog" aria-modal="true" aria-labelledby="sheet-title" novalidate>
     <div class="grab"></div>
-    <h2 id="sheet-title">수업 등록</h2>
+    <h2 id="sheet-title">수업 수정</h2>
     <label class="fld"><span>회원 이름</span><input type="text" id="f-title" list="members" autocomplete="off" placeholder="예: 김민지"></label>
     <datalist id="members"></datalist>
     <label class="fld"><span>날짜</span><input type="date" id="f-date"></label>
@@ -439,13 +441,7 @@ body { margin: 0; }
       </div>
       <input type="hidden" id="f-end">
     </div>
-    <div class="row2" id="repeat-box">
-      <label class="fld"><span>반복</span>
-        <select id="f-repeat"><option value="0">반복 안 함</option><option value="7">매주</option><option value="14">격주</option></select>
-      </label>
-      <label class="fld" id="count-box" hidden><span>횟수</span><input type="number" id="f-count" min="2" max="52" value="10" inputmode="numeric"></label>
-    </div>
-    <fieldset id="status-box" hidden>
+    <fieldset id="status-box">
       <legend>상태</legend>
       <div class="segs">
         <label class="seg"><input type="radio" name="status" value="scheduled" checked><span>예정</span></label>
@@ -457,7 +453,7 @@ body { margin: 0; }
     <p class="note" id="f-note" hidden></p>
     <p class="err" id="f-msg" role="alert" hidden></p>
     <div class="actions">
-      <button type="button" class="btn danger" id="btn-del" hidden>삭제</button>
+      <button type="button" class="btn danger" id="btn-del">삭제</button>
       <button type="button" class="btn" id="btn-close">닫기</button>
       <button type="submit" class="btn primary" id="btn-save">저장</button>
     </div>
@@ -1070,20 +1066,14 @@ body { margin: 0; }
     n.textContent = m; n.hidden = !m;
   }
   function openSheet(ev) {
-    state.editing = ev ? ev.id : null;
-    $('#sheet-title').textContent = ev ? '수업 수정' : '수업 등록';
-    $('#f-title').value = ev ? ev.title : '';
-    $('#f-date').value = ev ? ev.date : state.selected;
-    $('#f-start').value = ev ? ev.start : '10:00';
-    $('#f-end').value = ev ? ev.end : '10:50';
-    $('#f-memo').value = ev ? (ev.memo || '') : '';
-    $('#f-repeat').value = '0';
-    $('#count-box').hidden = true;
-    $('#repeat-box').hidden = !!ev;
-    $('#status-box').hidden = !ev;
-    setStatusRadio(ev ? (ev.status || 'scheduled') : 'scheduled');
-    $('#seg-done').hidden = !(ev && ev.status === 'done'); // done only comes from a member signature
-    $('#btn-del').hidden = !ev;
+    state.editing = ev.id;
+    $('#f-title').value = ev.title;
+    $('#f-date').value = ev.date;
+    $('#f-start').value = ev.start;
+    $('#f-end').value = ev.end;
+    $('#f-memo').value = ev.memo || '';
+    setStatusRadio(ev.status || 'scheduled');
+    $('#seg-done').hidden = ev.status !== 'done'; // done only comes from a member signature
     $('#f-msg').hidden = true;
     $('#btn-save').disabled = false;
     dur = toMin($('#f-end').value) - toMin($('#f-start').value) === 30 ? 30 : 50; // lessons are 30 or 50 min
@@ -1094,7 +1084,6 @@ body { margin: 0; }
     $('#sheet').hidden = false;
     document.body.classList.add('locked');
     updateNote();
-    if (!ev) setTimeout(function () { $('#f-title').focus(); }, 60);
   }
   function closeSheet() {
     $('#sheet').hidden = true;
@@ -1122,7 +1111,6 @@ body { margin: 0; }
         var after = [];
         if (old.id && (old.start !== start || old.end !== end)) {
           // later lessons on the same weekday, still unsigned
-          var wd = parse(old.date).getDay();
           after = lessonsFrom(old, { sameWeekday: true }).filter(function (x) { return x.id !== old.id && x.status === 'scheduled'; });
           var choice = await askTimeChange(old, start, end, after.length + 1);
           if (!choice) { $('#btn-save').disabled = false; return; }
@@ -1139,13 +1127,6 @@ body { margin: 0; }
           await put(upd);
           toast('수정했어요');
         }
-      } else {
-        var step = Number($('#f-repeat').value);
-        var n = step ? Math.min(52, Math.max(2, Number($('#f-count').value) || 2)) : 1;
-        for (var i = 0; i < n; i++) {
-          await put({ id: newId(), title: title, date: addDays(date, step * i), start: start, end: end, memo: memo, status: 'scheduled' });
-        }
-        toast(n > 1 ? n + '회 수업을 등록했어요' : '수업을 등록했어요');
       }
       var d = parse(date);
       state.selected = date;
@@ -1324,7 +1305,6 @@ body { margin: 0; }
   document.addEventListener('keydown', function (e) { if (e.key !== 'Escape') return; if (!$('#confm').hidden) $('#confm-no').click(); else if (!$('#editm').hidden) $('#editm-cancel').click(); else if (!$('#delm').hidden) $('#delm').hidden = true; else if (!$('#sheet').hidden) closeSheet(); });
   $('#form').addEventListener('submit', saveForm);
   $('#btn-del').addEventListener('click', removeCurrent);
-  $('#f-repeat').addEventListener('change', function () { $('#count-box').hidden = $('#f-repeat').value === '0'; });
   $('#f-start').addEventListener('input', function () {
     var s = $('#f-start').value; if (!s) return;
     $('#f-end').value = fromMin(toMin(s) + dur); updateNote();
