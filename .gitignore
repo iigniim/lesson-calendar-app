@@ -11,3 +11,4 @@ node_modules
 .env.*
 # backup exports contain member names and phone numbers
 lesson-calendar-*.json
+.shots/
