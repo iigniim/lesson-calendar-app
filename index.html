@@ -236,6 +236,7 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 .seg input { position: absolute; opacity: 0; pointer-events: none; }
 .seg span { display: block; text-align: center; padding: 10px 0; border: 1px solid var(--border); border-radius: 4px; font-weight: 500; background: var(--surface-2); }
 .seg input:checked + span { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+#g-rep .seg input:checked + span { background: var(--surface-2); border-color: var(--accent); color: var(--accent-text); }   /* flat: accent text on surface-2 */
 .seg input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
 .note { margin: 0; font-size: 13px; padding: 8px 10px; border-radius: 4px; background: var(--accent-soft); }
 .err { margin: 0; font-size: 13px; color: var(--accent-text); font-weight: 500; }
@@ -583,6 +584,15 @@ body { margin: 0; }
   <form class="panel" id="eform" role="dialog" aria-modal="true" aria-labelledby="e-title" novalidate>
     <div class="grab"></div>
     <h2 id="e-title"><span class="dot hh" id="e-dot" hidden></span><span id="e-title-t">신청서 등록</span></h2>
+    <fieldset id="g-repeat-box" hidden>
+      <legend>등록 방식</legend>
+      <div class="segs" id="g-rep">
+        <label class="seg"><input type="radio" name="g-rep" value="one" checked><span>이 날만</span></label>
+        <label class="seg"><input type="radio" name="g-rep" value="week"><span>이후 같은 요일 반복</span></label>
+      </div>
+      <label class="fld" id="g-rend-box" hidden><span>종료일</span><input type="date" id="g-rend"></label>
+      <p class="note" id="g-rep-note" hidden></p>
+    </fieldset>
     <label class="fld"><span>성명</span><input type="text" id="g-name" list="g-members" autocomplete="off" placeholder="예: 김민지"></label>
     <datalist id="g-members"></datalist>
     <div class="row2">
@@ -590,12 +600,14 @@ body { margin: 0; }
       <label class="fld"><span>호수</span><input type="text" id="g-ho" autocomplete="off" inputmode="numeric" maxlength="8" placeholder="예: 101"></label>
     </div>
     <label class="fld"><span>연락처</span><input type="tel" id="g-phone" autocomplete="off" placeholder="010-0000-0000"></label>
+    <div class="stack" id="g-month-box">
     <label class="fld"><span>강습 월</span><input type="month" id="g-month"></label>
     <div class="row2">
       <label class="fld"><span>등록 기간 시작</span><input type="date" id="g-ps"></label>
       <label class="fld"><span>등록 기간 끝</span><input type="date" id="g-pe"></label>
     </div>
-    <fieldset>
+    </div>
+    <fieldset id="g-days-box">
       <legend>강습 요일</legend>
       <div class="segs" id="g-days">
         <label class="seg"><input type="checkbox" value="2"><span>화</span></label>
@@ -1824,7 +1836,7 @@ body { margin: 0; }
   $('#sel-del').addEventListener('click', deleteSelected);
 
   /* ---- enrollment sheet ---- */
-  var eState = { editing: null, periodDirty: false, edur: 50, slots: {} };
+  var eState = { editing: null, periodDirty: false, edur: 50, slots: {}, date: null };   // date: set when a new lesson is added from the calendar
   function setDays(list) {
     document.querySelectorAll('#g-days input').forEach(function (i) { i.checked = list.indexOf(Number(i.value)) >= 0; });
   }
@@ -1870,11 +1882,47 @@ body { margin: 0; }
   }
   function updateEnrHints() {
     renderSlots();
+    updateRepUI();
+  }
+  /* Adding from the calendar (date given): "이 날만" (one lesson) or "이후 같은 요일 반복" (that weekday from the date through 종료일).
+     The lessons are linked like every other lesson (member + 신청서), which is what the edit/delete scopes use. */
+  function repMode() { return eState.date && !eState.editing ? document.querySelector('input[name=g-rep]:checked').value : null; }
+  function repDates() {   // the dates this form would create
+    var mode = repMode();
+    if (mode === 'one') return [eState.date];
+    if (mode === 'week') {
+      var end = $('#g-rend').value;
+      return end && end >= eState.date ? genDates({ periodStart: eState.date, periodEnd: end, days: [parse(eState.date).getDay()] }) : [];
+    }
+    return null;
+  }
+  // dates that already have a lesson of this member (exact duplicate rule of the 신청서 form)
+  function dupDate(d, personId, enrId) {
+    return state.events.some(function (x) { return x.date === d && x.status !== 'cancelled' && memberOf(x) === personId && (!x.enrollmentId || x.enrollmentId === enrId); });
+  }
+  function updateRepUI() {
+    var mode = repMode(), box = $('#g-repeat-box');
+    box.hidden = !eState.date || !!eState.editing;
+    ['#g-month-box', '#g-days-box', '#g-slots'].forEach(function (s) { $(s).hidden = !!mode; });   // weekday and period come from the date
+    $('#g-rend-box').hidden = mode !== 'week';
+    var note = $('#g-rep-note');
+    if (mode !== 'week') { note.hidden = true; return; }
+    var ds = repDates() || [], name = $('#g-name').value.trim(), skip = 0;
+    if (name && ds.length) {
+      var md = memberData(); md.members = state.members.slice();
+      var p = Members.ensure(md, name, $('#g-dong').value.trim() + '|' + $('#g-ho').value.trim());
+      skip = ds.filter(function (d) { return dupDate(d, p.id, null); }).length;
+    }
+    note.textContent = $('#g-rend').value && $('#g-rend').value < eState.date ? '종료일이 시작 날짜보다 빠를 수 없어요.' : (ds.length - skip) + '개 수업이 등록돼요' + (skip ? ' (이미 있는 ' + skip + '개 제외)' : '');
+    note.hidden = false;
   }
   // date (optional): opened from the calendar, so start with that day's month and weekday
   // start (optional, "HH:MM"): opened from a Week-view cell, 50 minutes long like the default
   function openEnr(enr, date, start) {
     eState.editing = enr ? enr.id : null;
+    eState.date = !enr && date ? date : null;
+    document.querySelector('input[name=g-rep][value=one]').checked = true;
+    if (eState.date) $('#g-rend').value = monthBounds(date.slice(0, 7))[1];   // default end: the end of that month (the 신청서's usual period)
     eState.periodDirty = !!enr;
     var key = date ? date.slice(0, 7) : monthKey(state.month), b = monthBounds(enr ? enr.month : key);
     $('#e-title-t').textContent = enr ? '신청서 수정' : date ? '수업 등록' : '신청서 등록';
@@ -1928,7 +1976,10 @@ body { margin: 0; }
   }
   async function saveEnrForm(ev) {
     ev.preventDefault();
+    var snapNew = eState.date && !eState.editing ? JSON.parse(JSON.stringify({ events: state.events, enrollments: state.enrollments, members: state.members, colors: state.settings.colors })) : null;   // undo of a calendar add
     var enr = readEnr();
+    var mode = repMode();   // 'one' | 'week' when adding from the calendar, else null (the 신청서 form as before)
+    if (mode) enr.days = [parse(eState.date).getDay()];
     if (!enr.name) return eErr('성명을 입력해 주세요.');
     if (!enr.dong) return eErr('동을 입력해 주세요. 예: A');
     if (!enr.ho) return eErr('호수를 입력해 주세요. 예: 101');
@@ -1936,6 +1987,7 @@ body { margin: 0; }
     if (!enr.periodStart || !enr.periodEnd || enr.periodEnd < enr.periodStart) return eErr('등록 기간의 시작과 끝을 확인해 주세요.');
     if (!enr.start || !enr.end || toMin(enr.end) <= toMin(enr.start)) return eErr('종료 시간이 시작 시간보다 늦어야 해요.');
     var gen = !eState.hasLessons;
+    if (mode === 'week' && (!$('#g-rend').value || $('#g-rend').value < eState.date)) return eErr('종료일을 시작 날짜와 같거나 이후로 골라 주세요.');
     if (gen && !enr.days.length) return eErr('달력에 일정을 만들려면 강습 요일을 골라 주세요.');
     // editing a 신청서 and changing the 성명 = renaming its member (every lesson, color and sheet follows; a taken name offers a merge)
     var cur0 = eState.editing && state.enrollments.find(function (e) { return e.id === eState.editing; });
@@ -1973,20 +2025,43 @@ body { margin: 0; }
       });
       gen = enr.days.length > 0;
     }
-    var dates = gen ? genDates(form).filter(function (d) {
+    var allDates = gen ? (mode ? repDates() : genDates(form)) : [];
+    var dates = allDates.filter(function (d) {
       if (changed && d < today) return false;
-      return !state.events.some(function (x) { return x.date === d && x.status !== 'cancelled' && memberOf(x) === person.id && (!x.enrollmentId || x.enrollmentId === enr.id); });
-    }) : [];
-    putEnr(enr);
-    dates.forEach(function (d) {
-      var t = slotOf(form, parse(d).getDay());
-      state.events.push({ id: newId(), title: person.name, memberId: person.id, date: d, start: t.start, end: t.end, memo: '', status: 'scheduled', enrollmentId: enr.id });
+      return !dupDate(d, person.id, enr.id);   // an exact duplicate (same member, same day) is skipped
     });
+    var skipped = allDates.length - dates.length;
+    putEnr(enr);
+    var created = [];
+    dates.forEach(function (d) {
+      var t = slotOf(form, parse(d).getDay()), e2 = { id: newId(), title: person.name, memberId: person.id, date: d, start: t.start, end: t.end, memo: '', status: 'scheduled', enrollmentId: enr.id };
+      state.events.push(e2); created.push(e2);
+    });
+    // a repeat that runs into later months: each lesson belongs to the 신청서 of its own month (existing one, or a new one like the member's others)
+    var other = created.filter(function (e2) { return e2.date.slice(0, 7) !== enr.month; }), madeEnr = [];
+    if (other.length) {
+      var oids = other.map(function (e2) { return e2.id; });
+      other.forEach(function (e2) { delete e2.enrollmentId; });
+      Members.moveLessons(memberData(), oids, person.id);
+      madeEnr = Members.ensureEnrollments(memberData(), oids, person.id);
+      saveEnr();
+    }
     if (gen || changed) saveEvents();
     syncEnrFromLessons(enr.id);
+    other.forEach(function (e2) { syncEnrFromLessons(e2.enrollmentId); });
     var d0 = parse(enr.month + '-01');
     state.month = new Date(d0.getFullYear(), d0.getMonth(), 1);
     closeEnr(); render();
+    if (mode) {
+      var skipNote = skipped ? ' · ' + skipped + '개는 이미 있어 건너뛰었어요' : '';
+      if (dates.length) {
+        undoData = { snap: snapNew, done: '등록을 되돌렸어요' };
+        $('#undo-text').textContent = dates.length + '개 수업을 등록했어요' + skipNote;
+        $('#undo').hidden = false;
+        clearTimeout(undoTimer); undoTimer = setTimeout(function () { $('#undo').hidden = true; undoData = null; }, 5000);
+      } else toast(skipped ? skipped + '개는 이미 있어 건너뛰었어요' : '등록할 수업이 없어요');
+      return;
+    }
     toast(changed ? '저장했어요. 서명 안 된 수업 ' + dates.length + '회를 새 일정으로 바꿨어요' : gen ? '저장했어요. 달력에 수업 ' + dates.length + '회를 넣었어요' : '저장했어요');
   }
   async function removeEnr() {
@@ -2198,7 +2273,9 @@ body { margin: 0; }
   $('#btn-eclose').addEventListener('click', closeEnr);
   $('#btn-edel').addEventListener('click', removeEnr);
   $('#esheet').addEventListener('click', function (e) { if (e.target === $('#esheet')) closeEnr(); });
-  ['#g-days', '#g-ps', '#g-pe'].forEach(function (s) { $(s).addEventListener('input', updateEnrHints); });
+  ['#g-days', '#g-ps', '#g-pe', '#g-rend', '#g-dong', '#g-ho'].forEach(function (s) { $(s).addEventListener('input', updateEnrHints); });
+  document.querySelectorAll('input[name=g-rep]').forEach(function (i) { i.addEventListener('change', updateEnrHints); });
+  $('#g-name').addEventListener('input', updateRepUI);
   $('#g-name').addEventListener('change', function () { autofillFrom($('#g-name').value.trim()); });
   $('#g-month').addEventListener('input', function () {
     var k = $('#g-month').value;
