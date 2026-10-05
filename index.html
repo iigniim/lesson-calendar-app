@@ -599,10 +599,6 @@ body { margin: 0; }
       <input type="hidden" id="g-end">
     </div>
     <div id="g-slots"></div>
-    <div id="g-gen-box">
-      <label class="chk"><input type="checkbox" id="g-gen" checked><span>달력에 수업 일정 만들기</span></label>
-      <p class="help" id="g-gen-note"></p>
-    </div>
     <div id="g-lessons-box" hidden><p class="help" id="g-lessons"></p></div>
     <p class="help" id="g-del-help" hidden>삭제하면 아직 진행 전인 연결 수업도 달력에서 함께 지워져요.</p>
     <p class="err" id="g-msg" role="alert" hidden></p>
@@ -1619,10 +1615,6 @@ body { margin: 0; }
   }
   function updateEnrHints() {
     renderSlots();
-    var tmp = readEnr(), ds = genDates(tmp), note = $('#g-gen-note');
-    if (!tmp.days.length) note.textContent = '요일을 고르면 달력에 넣을 날짜를 미리 보여 드려요.';
-    else if (!ds.length) note.textContent = '등록 기간 안에 고른 요일이 없어요.';
-    else note.textContent = ds.length + '회 (' + mdLabel(ds[0]) + ' ~ ' + mdLabel(ds[ds.length - 1]) + ')';
   }
   // date (optional): opened from the calendar, so start with that day's month and weekday
   // start (optional, "HH:MM"): opened from a Week-view cell, 50 minutes long like the default
@@ -1649,8 +1641,7 @@ body { margin: 0; }
     state.enrollments.forEach(function (e) { names[e.name] = 1; });
     $('#g-members').innerHTML = Object.keys(names).sort().map(function (n) { return '<option value="' + esc(n) + '">'; }).join('');
     var lessons = enr ? lessonsFor(enr) : [];
-    $('#g-gen-box').hidden = lessons.length > 0;
-    $('#g-gen').checked = true;
+    eState.hasLessons = lessons.length > 0;   // a new 신청서 (or one without lessons yet) always gets its lessons put on the calendar
     $('#g-lessons-box').hidden = !lessons.length;
     if (lessons.length) {
       $('#g-lessons').innerHTML = '달력에 수업 ' + lessons.length + '회 (첫 수업 ' + mdLabel(lessons[0].date) + ' ~ 마지막 수업 ' + mdLabel(lessons[lessons.length - 1].date) + ')<br>' +
@@ -1689,7 +1680,7 @@ body { margin: 0; }
     if (!enr.month) return eErr('강습 월을 선택해 주세요.');
     if (!enr.periodStart || !enr.periodEnd || enr.periodEnd < enr.periodStart) return eErr('등록 기간의 시작과 끝을 확인해 주세요.');
     if (!enr.start || !enr.end || toMin(enr.end) <= toMin(enr.start)) return eErr('종료 시간이 시작 시간보다 늦어야 해요.');
-    var gen = !$('#g-gen-box').hidden && $('#g-gen').checked;
+    var gen = !eState.hasLessons;
     if (gen && !enr.days.length) return eErr('달력에 일정을 만들려면 강습 요일을 골라 주세요.');
     // same 동 + 호 and month already has a 신청서 (a family): share it (the first name stays), one lesson set per person
     var person = enr.name, form = enr;
