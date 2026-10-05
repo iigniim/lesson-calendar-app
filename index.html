@@ -1691,6 +1691,11 @@ body { margin: 0; }
   $('#undo-btn').addEventListener('click', function () {
     if (!undoData) return;
     var d = undoData; undoData = null; $('#undo').hidden = true; clearTimeout(undoTimer);
+    if (d.snap) {   // undo a member merge: restore everything exactly as it was
+      state.events = d.snap.events; state.enrollments = d.snap.enrollments; state.members = d.snap.members; state.settings.colors = d.snap.colors;
+      saveAllMemberData(); render(); toast('합치기를 되돌렸어요');
+      return;
+    }
     if (d.move) {   // undo a drag-move: put the lesson back exactly as it was
       if (state.events.some(function (x) { return x.id === d.move.id; })) { put(d.move); toast('수업을 되돌렸어요'); }
       return;
@@ -1699,6 +1704,29 @@ body { margin: 0; }
     d.evs.forEach(function (e) { if (!state.events.some(function (x) { return x.id === e.id; })) state.events.push(e); });
     saveEnr(); saveEvents(); render(); toast(d.enrs.length + '건을 되돌렸어요');
   });
+  /* Rename a member. Only the member record changes; lessons, 신청서, colors and sheets show the new name through it.
+     Returns true when done, false when cancelled. A name that another member already has offers a merge (undoable for 5 seconds). */
+  function saveAllMemberData() { lsSave(); saveEnr(); saveSettings(); }
+  async function renameMember(id, newName) {
+    var d = memberData(), res = Members.rename(d, id, newName);
+    if (res.conflict) {
+      var count = Members.lessonCount(d, id);
+      if (!await ask('회원 합치기', '이미 있는 회원입니다. 두 회원의 수업을 합칠까요?\n수업 ' + count + '개가 "' + res.conflict.name + '" 회원으로 옮겨져요. (이름과 색은 기존 회원 그대로예요)', '합치기')) return false;
+      var snapshot = JSON.parse(JSON.stringify({ events: state.events, enrollments: state.enrollments, members: state.members, colors: state.settings.colors }));
+      Members.merge(d, id, res.conflict.id);
+      state.members = d.members;
+      saveAllMemberData(); render();
+      undoData = { snap: snapshot };
+      $('#undo-text').textContent = '회원을 합쳤어요 (수업 ' + count + '개)';
+      $('#undo').hidden = false;
+      clearTimeout(undoTimer); undoTimer = setTimeout(function () { $('#undo').hidden = true; undoData = null; }, 5000);
+      return true;
+    }
+    if (!res.ok) { eErr('성명을 입력해 주세요.'); return false; }
+    saveAllMemberData(); render();
+    toast('이름을 바꿨어요');
+    return true;
+  }
   async function deleteSelected() {
     var ids = Object.keys(sel.ids), plan = planDelete(ids);
     if (!plan.enrs.length) return;
@@ -1831,6 +1859,10 @@ body { margin: 0; }
     if (!enr.start || !enr.end || toMin(enr.end) <= toMin(enr.start)) return eErr('종료 시간이 시작 시간보다 늦어야 해요.');
     var gen = !eState.hasLessons;
     if (gen && !enr.days.length) return eErr('달력에 일정을 만들려면 강습 요일을 골라 주세요.');
+    // editing a 신청서 and changing the 성명 = renaming its member (every lesson, color and sheet follows; a taken name offers a merge)
+    var cur0 = eState.editing && state.enrollments.find(function (e) { return e.id === eState.editing; });
+    var mem0 = cur0 && state.members.find(function (m) { return m.id === cur0.memberId; });
+    if (mem0 && Members.clean(enr.name) !== mem0.name && !await renameMember(mem0.id, enr.name)) return;
     // same 동 + 호 and month already has a 신청서 (a family): share it (the first name stays), one lesson set per person
     var form = enr;
     var same = eState.editing ? null : state.enrollments.find(function (e) { return e.dong === enr.dong && e.ho === enr.ho && e.month === enr.month; });
