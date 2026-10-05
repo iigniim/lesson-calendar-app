@@ -146,3 +146,26 @@ console.log('OK members');
   assert.deepStrictEqual([nov[0].month, nov[0].dong, nov[0].ho], ['2026-11', 'B', '2']);
   console.log('OK moveLessons');
 }
+
+// ---- the typed name of an enrolled person must hit THAT person, not a leftover duplicate without a 신청서
+{
+  const dd = {
+    members: [{ id: 'real', name: '김가나' }, { id: 'dup', name: '김가나' }, { id: 'other', name: '다른사람' }],
+    enrollments: [{ id: 'r10', month: '2026-10', name: '김가나', dong: 'A', ho: '101', memberId: 'real' }, { id: 'o10', month: '2026-10', name: '다른사람', dong: 'B', ho: '202', memberId: 'other' }],
+    events: [{ id: 'l1', title: '다른사람', memberId: 'other', date: '2026-10-13', enrollmentId: 'o10' }, { id: 'l2', title: '김가나', memberId: 'dup', date: '2026-12-01' }],
+    colors: {}
+  };
+  assert.strictEqual(M.ensure(dd, '김가나', 'B|202', { anyHousehold: true }).id, 'real', 'from the calendar: the person with the 동/호 and 신청서');
+  M.moveLessons(dd, ['l1'], 'real'); assert.strictEqual(M.ensureEnrollments(dd, ['l1'], 'real').length, 0);
+  assert.strictEqual(dd.events.find((e) => e.id === 'l1').enrollmentId, 'r10', 'linked to the 신청서 of 김가나 (color + sheet follow)');
+  // migration: an unlinked lesson in a month without 신청서 joins the one 김가나, no duplicate member
+  const old = { members: [], colors: {}, enrollments: [{ id: 'r10', month: '2026-10', name: '김가나', dong: 'A', ho: '101' }], events: [{ id: 'z', title: '김가나', date: '2026-12-01', start: '10:00', end: '10:50' }], newId };
+  M.migrate(old); assert.strictEqual(old.members.length, 1, 'one 김가나, not two');
+  // startup repair: the leftover duplicate (no 신청서) merges into the enrolled 김가나; its lessons join that person
+  assert.strictEqual(M.dedupe(dd), 1); assert.ok(!dd.members.some((m) => m.id === 'dup'));
+  assert.strictEqual(dd.events.find((e) => e.id === 'l2').memberId, 'real'); assert.strictEqual(M.dedupe(dd), 0, 'idempotent');
+  const amb = { members: [{ id: 'p', name: '같은이름' }, { id: 'q', name: '같은이름' }, { id: 'r', name: '같은이름' }], enrollments: [{ id: 'e1', month: '2026-10', memberId: 'p' }, { id: 'e2', month: '2026-10', memberId: 'q' }], events: [], colors: {} };
+  assert.strictEqual(M.dedupe(amb), 0, 'two enrolled people with one name: nothing is merged');
+  console.log('OK same-name match');
+}
+

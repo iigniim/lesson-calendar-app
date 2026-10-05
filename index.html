@@ -798,13 +798,15 @@ body { margin: 0; }
   /* Adds member ids to data that has none (old saves, old backups, an old cloud copy). Idempotent.
      The first time it changes anything, the raw old data is copied to <key>__backup_before_member_id_migration (never overwritten). */
   function runMemberMigration() {
-    var d = memberData(), before = state.members.length, changed = Members.migrate(d);
+    var d = memberData(), changed = Members.migrate(d);
+    var deduped = Members.dedupe(d);   // duplicates of an enrolled member (no 신청서 of their own) merge into that member
     state.members = d.members;
-    if (changed) {
+    if (changed || deduped) {
       try {
         [LS, LS_E, LS_S].forEach(function (k) {
           var raw = localStorage.getItem(k);
-          if (raw != null && localStorage.getItem(k + BACKUP_SUFFIX) == null) localStorage.setItem(k + BACKUP_SUFFIX, raw);
+          var bk = k + (changed ? BACKUP_SUFFIX : '__backup_before_member_dedupe');   // first migration, or the later duplicate repair
+          if (raw != null && localStorage.getItem(bk) == null) localStorage.setItem(bk, raw);
         });
       } catch (e) { toast('저장 공간이 부족해요. 백업 후 정리해 주세요.'); }
       applyMemberNames();

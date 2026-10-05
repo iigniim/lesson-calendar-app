@@ -46,6 +46,12 @@
       var ids = {};
       d.enrollments.forEach(function (x) { if (x.month === e.date.slice(0, 7) && norm(x.name) === norm(e.title) && x.memberId) ids[x.memberId] = 1; });
       var keys = Object.keys(ids);
+      if (keys.length !== 1) {   // no 신청서 that month: join the member of the same name when that is unambiguous (otherwise a duplicate person appears)
+        var any = {};
+        d.enrollments.forEach(function (x) { if (norm(x.name) === norm(e.title) && x.memberId) any[x.memberId] = 1; });
+        var all = Object.keys(any);
+        if (all.length === 1) keys = all;
+      }
       e.memberId = keys.length === 1 ? keys[0] : resolve(e.title, '');
       changed = true;
     });
@@ -79,8 +85,10 @@
       return set;
     };
     var hit = cands.filter(function (m) { var s = hhs(m); return hh ? s[hh] : (s[''] || !Object.keys(s).length); })[0];
+    // the same name typed for a lesson means the person who has a 신청서 (동/호): never a leftover duplicate without one
+    var weight = function (m) { return d.enrollments.filter(function (e) { return e.memberId === m.id; }).length * 10000 + d.events.filter(function (e) { return e.memberId === m.id; }).length; };
+    if (!hit && opts && opts.anyHousehold) hit = cands.sort(function (a, b) { return weight(b) - weight(a); })[0];
     if (!hit && hh && cands.length) hit = cands.filter(function (m) { return !Object.keys(hhs(m)).some(function (k) { return k; }); })[0];   // member without any 동/호 yet
-    if (!hit && opts && opts.anyHousehold) hit = cands[0];
     if (hit) return hit;
     hit = { id: rid(d), name: nm };
     d.members.push(hit);
@@ -178,7 +186,22 @@
     return made;
   }
 
-  var api = { ensureEnrollments: ensureEnrollments, moveLessons: moveLessons, clean: clean, norm: norm, migrate: migrate, applyNames: applyNames, ensure: ensure, rename: rename, merge: merge, lessonCount: lessonCount };
+  /* Leftover duplicates: a member named like an enrolled member but with no 신청서 of their own is the same person (lessons added before the 신청서,
+     or lessons of a month without one). Old name-based matching treated them as one, so merge them into the enrolled member.
+     Skipped when several enrolled members share the name (different households: ambiguous). Returns how many members were merged. */
+  function dedupe(d) {
+    var groups = {}, merged = 0;
+    d.members.forEach(function (m) { (groups[norm(m.name)] = groups[norm(m.name)] || []).push(m); });
+    Object.keys(groups).forEach(function (k) {
+      var g = groups[k]; if (g.length < 2) return;
+      var enrolled = g.filter(function (m) { return d.enrollments.some(function (e) { return e.memberId === m.id; }); });
+      if (enrolled.length !== 1) return;
+      g.forEach(function (m) { if (m !== enrolled[0] && !d.enrollments.some(function (e) { return e.memberId === m.id; })) { merge(d, m.id, enrolled[0].id); merged++; } });
+    });
+    return merged;
+  }
+
+  var api = { dedupe: dedupe, ensureEnrollments: ensureEnrollments, moveLessons: moveLessons, clean: clean, norm: norm, migrate: migrate, applyNames: applyNames, ensure: ensure, rename: rename, merge: merge, lessonCount: lessonCount };
   root.Members = api;
   if (typeof module !== 'undefined') module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
