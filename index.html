@@ -74,13 +74,17 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .days { gap: 2px; }
 .day {
   min-width: 0; min-height: 66px; border: 1px solid transparent; background: transparent;
-  border-radius: 4px; padding: 4px 3px 3px; display: flex; flex-direction: column; align-items: stretch; gap: 3px; text-align: left;
+  border-radius: 4px; padding: 4px 1px 3px; display: flex; flex-direction: column; align-items: stretch; gap: 3px; text-align: left;
 }
-.day .nrow { display: flex; align-items: center; justify-content: center; gap: 2px; min-width: 0; overflow: hidden; white-space: nowrap; }
-.day .lu { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 9px; font-weight: 400; line-height: 1; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.day .nrow { display: flex; align-items: center; justify-content: center; gap: 1px; min-width: 0; overflow: hidden; white-space: nowrap; }
+.day .lu { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 9px; font-weight: 400; line-height: 1; letter-spacing: -0.03em; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.day .lu.m1 { color: var(--text); }
+/* leap month (윤10.30 is the longest text): squeeze so it still fits on one line */
+.day .lp .n { min-width: 0; padding: 0 1px; }
+.day .lp .lu { letter-spacing: -0.06em; }
 @media (max-width: 340px) { .day .lu { display: none; } }
 .agenda-h h2 .lfull { font-family: var(--f-body); font-size: 12px; font-weight: 400; color: var(--text-muted); margin-left: 6px; }
-.day .n { flex: none; font-size: 13px; font-weight: 600; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; font-variant-numeric: tabular-nums; }
+.day .n { flex: none; font-size: 13px; font-weight: 600; min-width: 20px; height: 20px; padding: 0 2px; display: grid; place-items: center; border-radius: 50%; font-variant-numeric: tabular-nums; }
 .day.c0 .n, .day.hol .n { color: var(--accent); }
 .day .hn { font-size: 10px; line-height: 1.1; color: var(--accent); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .day.c6 .n { color: var(--text-muted); }
@@ -574,12 +578,13 @@ body { margin: 0; }
   var LS = 'lesson-calendar-v1', LS_E = 'lesson-calendar-enroll-v1', LS_S = 'lesson-calendar-settings-v1';
 
   function pad(n) { return String(n).padStart(2, '0'); }
-  /* lunar date text: "15", "8.1" on the first day of a month, "윤6.1" for a leap month; full form for the day heading */
+  /* lunar date text for a calendar cell: "8.15", "윤6.3" (leap month); the full form is for the day heading */
   function lunarShort(s) {
     var l = getLunar(s);
-    if (!l) return '';
-    return l.day === 1 ? (l.isLeap ? '윤' : '') + l.month + '.1' : String(l.day);
+    return l ? (l.isLeap ? '윤' : '') + l.month + '.' + l.day : '';
   }
+  function lunarLeap(s) { var l = getLunar(s); return !!l && l.isLeap; }
+  function lunarDay1(s) { var l = getLunar(s); return !!l && l.day === 1; }
   function lunarFull(s) {
     var l = getLunar(s);
     return l ? '음력 ' + (l.isLeap ? '윤' : '') + l.month + '월 ' + l.day + '일' : '';
@@ -832,7 +837,7 @@ body { margin: 0; }
       if (list.length > 2) chips += '<span class="more">+' + (list.length - 2) + '</span>';
       html += '<button type="button" class="' + cls + '" data-date="' + s + '" aria-label="' +
         (d.getMonth() + 1) + '월 ' + d.getDate() + '일 ' + WD[d.getDay()] + '요일, ' + (hol ? esc(hol) + ', ' : '') + (lunarFull(s) ? lunarFull(s) + ', ' : '') + '수업 ' + list.length + '개">' +
-        '<span class="nrow"><span class="n">' + d.getDate() + '</span><span class="lu">' + lunarShort(s) + '</span></span>' + (hol ? '<span class="hn">' + esc(hol) + '</span>' : '') + chips + '</button>';
+        '<span class="nrow' + (lunarLeap(s) ? ' lp' : '') + '"><span class="n">' + d.getDate() + '</span><span class="lu' + (lunarDay1(s) ? ' m1' : '') + '">' + lunarShort(s) + '</span></span>' + (hol ? '<span class="hn">' + esc(hol) + '</span>' : '') + chips + '</button>';
     }
     $('#days').innerHTML = html;
   }
