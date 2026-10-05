@@ -53,7 +53,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* header */
 .head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
 .head-l { min-width: 0; }
-.month { font-family: var(--f-display); font-size: 30px; line-height: 1.1; margin: 0; letter-spacing: 0.01em; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.month { font-family: var(--f-display); font-size: 30px; line-height: 1.2; margin: 0; letter-spacing: 0.01em; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 380px) { .month { font-size: 26px; } .head { gap: 8px; } .head-r { gap: 4px; } }
 .sync { margin: 2px 0 0; font-size: 12px; color: var(--text-muted); }
 .sync.warn { color: var(--accent); }
@@ -178,7 +178,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
   isolation: isolate; background: var(--surface); color: var(--text); border: 0; border-left: 3px solid var(--hc); border-radius: 4px;
 }
 .wkev::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--tint); }   /* same tint as .chip, on an opaque base so hour lines do not show through */
-.wkev b, .wkev small, .wkev em { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.2; }
+.wkev b, .wkev small, .wkev em { flex: none; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.2; }
+.wkev.s1 small, .wkev.s1 em, .wkev.s2 em { display: none; }   /* short blocks: no half-cut lines, show only what fits */
+.wkev.s1 { padding-block: 1px; }
 .wkev b { font-size: 11px; font-weight: 600; }
 .wkev small, .wkev em { font-size: 9px; font-style: normal; color: var(--text); font-variant-numeric: tabular-nums; }
 .wk-now { position: absolute; z-index: 3; left: 0; right: 0; height: 1px; background: var(--accent); pointer-events: none; }
@@ -208,7 +210,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .panel h2 { font-family: var(--f-display); font-weight: 400; font-size: 22px; margin: 0; }
 .fld { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .fld > span, legend { font-size: 12px; font-weight: 600; color: var(--text-muted); letter-spacing: 0.02em; }
-input[type=text], input[type=date], input[type=time], input[type=number], select, textarea {
+input[type=text], input[type=date], input[type=time], input[type=number], input[type=month], input[type=tel], input[type=email], input[type=password], select, textarea {
   width: 100%; min-width: 0; font: inherit; font-size: 16px; color: var(--text); background: var(--surface-2);
   border: 1px solid var(--border); border-radius: 4px; padding: 10px 12px; min-height: 44px;
 }
@@ -261,7 +263,7 @@ body { margin: 0; }
 .enr-actions .btn { flex: 1 1 auto; min-width: 0; min-height: 46px; padding: 6px 8px; font-size: 14px; line-height: 1.25; }
 .enr { display: flex; align-items: stretch; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
 .enr-main { flex: 1; min-width: 0; display: flex; gap: 12px; align-items: center; text-align: left; background: none; border: 0; padding: 12px 8px 12px 12px; }
-.unit { flex: none; width: 50px; font-weight: 600; font-size: 14px; line-height: 1.25; font-variant-numeric: tabular-nums; }
+.unit { flex: none; min-width: 50px; max-width: 72px; overflow-wrap: anywhere; font-weight: 600; font-size: 14px; line-height: 1.25; font-variant-numeric: tabular-nums; }
 .unit small { display: block; font-weight: 500; font-size: 13px; color: var(--text-muted); }
 .pill.info { background: var(--accent-soft); color: var(--text); }
 .pill.warn { background: var(--border); color: var(--text-muted); }
@@ -280,8 +282,11 @@ body { margin: 0; }
 .selbox.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .enr-main.pick { min-height: 56px; }
 #confm-text { white-space: pre-line; }
+/* long names / notes wrap instead of running past the sheet (Korean keeps words together, long strings still break) */
+.panel h2, .panel p, .help, .note, .err, .sname, .sask { overflow-wrap: anywhere; word-break: keep-all; }
 .cph { margin: 8px 0 0; font-size: 15px; font-weight: 700; color: var(--text); }
 .chk { display: flex; align-items: center; gap: 10px; min-height: 44px; font-weight: 500; }
+.chk span { min-width: 0; overflow-wrap: anywhere; }
 .chk input { width: 22px; height: 22px; accent-color: var(--accent); flex: none; }
 
 /* ---- preview overlay ---- */
@@ -1001,7 +1006,7 @@ body { margin: 0; }
     var body = '<div class="wk-body" style="--wk-h:' + (to - from) * WK_ROW + 'px"><div class="wk-axis">' + axis + '</div>' + cols.map(function (items, i) {
       var inner = items.map(function (it) {
         var e = it.e, st = e.status || 'scheduled', h = Math.max((it.b - it.a) * WK_ROW / 60 - 1, 16);
-        return '<button type="button" class="wkev hh st-' + st + '" style="' + hh(lessonKey(e)) + ';top:' + ((it.a - from * 60) * WK_ROW / 60) + 'px;height:' + h + 'px;left:calc(' + (it.col * 100 / it.n) + '% + 1px);width:calc(' + (100 / it.n) + '% - 2px)" data-ev="' + esc(e.id) + '">' +
+        return '<button type="button" class="wkev hh st-' + st + (h < 28 ? ' s1' : h < 44 ? ' s2' : '') + '" style="' + hh(lessonKey(e)) + ';top:' + ((it.a - from * 60) * WK_ROW / 60) + 'px;height:' + h + 'px;left:calc(' + (it.col * 100 / it.n) + '% + 1px);width:calc(' + (100 / it.n) + '% - 2px)" data-ev="' + esc(e.id) + '">' +
           '<b>' + esc(e.title) + '</b><small>' + esc(e.start) + '–' + esc(e.end) + '</small>' + (e.memo ? '<em>' + esc(e.memo) + '</em>' : '') + '</button>';
       }).join('');
       return '<div class="wk-col" data-date="' + days[i] + '">' + inner + (days[i] === todayS ? '<div class="wk-now" style="top:' + nowTop() + 'px"></div>' : '') + '</div>';
