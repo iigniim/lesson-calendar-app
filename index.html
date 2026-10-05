@@ -95,10 +95,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .chip {
   display: block; min-width: 0; font-size: 10px; line-height: 1.25; padding: 1px 3px; border-radius: 4px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text);
-  background: hsl(var(--h) var(--s) calc(var(--l) * 1% + 16%) / 0.18); border-left: 3px solid var(--hc);
+  background: var(--tint); border-left: 3px solid var(--hc);
 }
 /* household color: --h --s --l come from PALETTE, dark theme only so lightness is lifted by a fixed 16% */
-.hh { --hc: hsl(var(--h) var(--s) calc(var(--l) * 1% + 16%)); }
+.hh { --hc: hsl(var(--h) var(--s) calc(var(--l) * 1% + 16%)); --tint: hsl(var(--h) var(--s) calc(var(--l) * 1% + 16%) / 0.18); }   /* --tint = name label background, shared by Month chips and Week blocks */
 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--hc); margin-right: 8px; vertical-align: 1px; }
 .more { font-size: 10px; color: var(--text-muted); text-align: center; line-height: 1; }
 
@@ -173,13 +173,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .wk-col { position: relative; min-width: 0; border-left: 1px solid var(--border); }
 .wkev {
   position: absolute; z-index: 1; min-width: 0; overflow: hidden; padding: 2px 2px 2px 4px; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; text-align: left;
-  background: var(--surface-2); color: var(--text); border: 0; border-left: 3px solid var(--hc); border-radius: 2px;
+  isolation: isolate; background: var(--surface); color: var(--text); border: 0; border-left: 3px solid var(--hc); border-radius: 4px;
 }
+.wkev::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--tint); }   /* same tint as .chip, on an opaque base so hour lines do not show through */
 .wkev b, .wkev small, .wkev em { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.2; }
 .wkev b { font-size: 11px; font-weight: 600; }
-.wkev small, .wkev em { font-size: 9px; font-style: normal; color: var(--text-muted); font-variant-numeric: tabular-nums; }
-.wkev.st-done { --hc: var(--border); }
-.wkev.st-done b { color: var(--text-muted); }
+.wkev small, .wkev em { font-size: 9px; font-style: normal; color: var(--text); font-variant-numeric: tabular-nums; }
 .wk-now { position: absolute; z-index: 3; left: 0; right: 0; height: 1px; background: var(--accent); pointer-events: none; }
 .wk-now::before { content: ""; position: absolute; left: -3px; top: -3px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
 
