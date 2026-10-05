@@ -77,8 +77,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
   border-radius: 4px; padding: 4px 1px 3px; display: flex; flex-direction: column; align-items: stretch; gap: 3px; text-align: left;
 }
 .day .nrow { display: flex; align-items: center; justify-content: center; gap: 1px; min-width: 0; overflow: hidden; white-space: nowrap; }
-.day .lu { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 9px; font-weight: 400; line-height: 1; letter-spacing: -0.03em; color: var(--text-muted); font-variant-numeric: tabular-nums; }
-.day .lu.m1 { color: var(--text); }
+.day .lu, .wk-dh .lu { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 9px; font-weight: 400; line-height: 1; letter-spacing: -0.03em; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.day .lu.m1, .wk-dh .lu.m1 { color: var(--text); }
 /* leap month (윤10.30 is the longest text): squeeze so it still fits on one line */
 .day .lp .n { min-width: 0; padding: 0 1px; }
 .day .lp .lu { letter-spacing: -0.06em; }
@@ -86,7 +86,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .agenda-h h2 .lfull { font-family: var(--f-body); font-size: 12px; font-weight: 400; color: var(--text-muted); margin-left: 6px; }
 .day .n { flex: none; font-size: 13px; font-weight: 600; min-width: 20px; height: 20px; padding: 0 2px; display: grid; place-items: center; border-radius: 50%; font-variant-numeric: tabular-nums; }
 .day.c0 .n, .day.hol .n { color: var(--accent); }
-.day .hn { font-size: 10px; line-height: 1.1; color: var(--accent); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.day .hn, .wk-dh .hn { font-size: 10px; line-height: 1.1; color: var(--accent); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .day.c6 .n { color: var(--text-muted); }
 .day.out { opacity: 0.38; }
 .day.sel { background: var(--accent-soft); border-color: transparent; }
@@ -130,6 +130,45 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .check[aria-pressed="true"] svg { opacity: 1; }
 .empty { background: var(--surface); border: 1px dashed var(--border); border-radius: 6px; padding: 22px 16px; text-align: center; color: var(--text-muted); }
 .empty b { display: block; color: var(--text); font-size: 15px; margin-bottom: 2px; }
+
+/* view toggle + week view */
+.vseg { display: flex; align-self: flex-end; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+.vseg button { min-height: 40px; padding: 0 16px; border: 0; background: none; color: var(--text-muted); font-weight: 600; font-size: 14px; }
+.vseg button + button { border-left: 1px solid var(--border); }
+.vseg button[aria-selected="true"] { background: var(--surface-2); color: var(--accent); }
+.month.wk-title { font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.agenda-r { display: flex; align-items: baseline; gap: 12px; }
+.wk { --wk-row: 52px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; touch-action: pan-y; }
+.wk-scroll { height: min(64vh, 600px); min-height: 320px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; position: relative; }
+.wk-head, .wk-body { display: grid; grid-template-columns: 40px repeat(7, minmax(0, 1fr)); }
+.wk-head { position: sticky; top: 0; z-index: 4; background: var(--surface); border-bottom: 1px solid var(--border); }
+.wk-dh { min-width: 0; height: 64px; padding: 4px 1px 2px; border: 0; border-left: 1px solid var(--border); background: transparent; display: flex; flex-direction: column; align-items: center; gap: 1px; }
+.wk-dh .wd { font-size: 11px; line-height: 1.2; color: var(--text-muted); }
+.wk-dh .wn { min-width: 20px; height: 20px; padding: 0 2px; display: grid; place-items: center; border-radius: 50%; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.wk-dh.c0 .wn, .wk-dh.hol .wn { color: var(--accent); }
+.wk-dh.today .wn { box-shadow: inset 0 0 0 1px var(--accent); }
+.wk-dh.sel { background: var(--accent-soft); }
+.wk-dh.sel .wn { color: var(--accent); }
+.wk-dh .lu, .wk-dh .hn { max-width: 100%; }
+.wk-body { position: relative; height: var(--wk-h); }
+.wk-body::before, .wk-body::after { content: ""; position: absolute; inset: 0; pointer-events: none; }
+.wk-body::before { background: linear-gradient(var(--border) 1px, transparent 1px) 0 0 / 100% var(--wk-row); }
+.wk-body::after { background: linear-gradient(var(--border) 1px, transparent 1px) 0 calc(var(--wk-row) / 2) / 100% var(--wk-row); opacity: 0.4; }
+.wk-axis { position: sticky; left: 0; z-index: 2; }
+.wk-axis span { position: absolute; right: 4px; font-size: 10px; line-height: 1; color: var(--text-muted); font-variant-numeric: tabular-nums; transform: translateY(-50%); }
+.wk-axis span:first-child { transform: translateY(3px); }
+.wk-col { position: relative; min-width: 0; border-left: 1px solid var(--border); }
+.wkev {
+  position: absolute; z-index: 1; min-width: 0; overflow: hidden; padding: 2px 2px 2px 4px; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; text-align: left;
+  background: var(--surface-2); color: var(--text); border: 0; border-left: 3px solid var(--hc); border-radius: 2px;
+}
+.wkev b, .wkev small, .wkev em { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.2; }
+.wkev b { font-size: 11px; font-weight: 600; }
+.wkev small, .wkev em { font-size: 9px; font-style: normal; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.wkev.st-done { --hc: var(--border); }
+.wkev.st-done b { color: var(--text-muted); }
+.wk-now { position: absolute; z-index: 3; left: 0; right: 0; height: 1px; background: var(--accent); pointer-events: none; }
+.wk-now::before { content: ""; position: absolute; left: -3px; top: -3px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
 
 /* add button */
 .fab {
@@ -328,13 +367,16 @@ body { margin: 0; }
   <nav class="tabs" role="tablist" aria-label="화면 선택"><button type="button" role="tab" data-tab="cal" aria-selected="true">달력</button><button type="button" role="tab" data-tab="enr" aria-selected="false">신청·출력</button></nav>
 
   <div id="view-cal" class="view">
+  <div class="vseg" role="tablist" aria-label="보기 방식"><button type="button" role="tab" data-view="month" aria-selected="true">월간</button><button type="button" role="tab" data-view="week" aria-selected="false">주간</button></div>
   <section class="cal" id="cal" aria-label="월간 달력">
     <div class="dow" aria-hidden="true"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
     <div class="days" id="days"></div>
   </section>
 
-  <section aria-live="polite">
-    <div class="agenda-h"><h2 id="a-title"></h2><p id="a-count"></p></div>
+  <section class="wk" id="week" aria-label="주간 달력" hidden><div class="wk-scroll" id="wk-scroll"></div></section>
+
+  <section id="agenda" aria-live="polite">
+    <div class="agenda-h"><h2 id="a-title"></h2><div class="agenda-r"><p id="a-count"></p><button type="button" class="linkbtn" id="to-week">주간 보기</button></div></div>
     <ul class="list" id="list" style="margin-top:10px"></ul>
   </section>
   </div>
@@ -575,6 +617,8 @@ body { margin: 0; }
   'use strict';
   var $ = function (s) { return document.querySelector(s); };
   var WD = ['일', '월', '화', '수', '목', '금', '토'];
+  var WEEK_START = 1;   // first day of the week in Week view: 0 = Sunday, 1 = Monday
+  var LS_VIEW = 'lesson-calendar-view-v1';   // last selected view (device only, not part of the backup)
   var LS = 'lesson-calendar-v1', LS_E = 'lesson-calendar-enroll-v1', LS_S = 'lesson-calendar-settings-v1';
 
   function pad(n) { return String(n).padStart(2, '0'); }
@@ -642,6 +686,7 @@ body { margin: 0; }
     enrollments: [],
     settings: { instructor: '김민기', label: '오전헬스', colors: {} },
     tab: 'cal',
+    view: loadView(),
     mode: 'local',
     selected: ymd(now),
     month: new Date(now.getFullYear(), now.getMonth(), 1),
@@ -809,7 +854,11 @@ body { margin: 0; }
   }
 
   function renderHead() {
-    $('#month').textContent = state.month.getFullYear() + '년 ' + (state.month.getMonth() + 1) + '월';
+    var wk = isWeek();
+    $('#month').textContent = wk ? weekTitle(weekStartOf(state.selected)) : state.month.getFullYear() + '년 ' + (state.month.getMonth() + 1) + '월';
+    $('#month').classList.toggle('wk-title', wk);
+    $('#prev').setAttribute('aria-label', wk ? '이전 주' : '이전 달');
+    $('#next').setAttribute('aria-label', wk ? '다음 주' : '다음 달');
     $('#sync').textContent = '이 기기에 저장됨';
   }
 
@@ -869,7 +918,93 @@ body { margin: 0; }
     }).join('');
   }
 
-  function render() { assignColors(); renderHead(); renderGrid(); renderAgenda(); renderEnr(); renderTabs(); }
+  /* ---------- week view ---------- */
+  var WK_FROM = 6, WK_TO = 23, WK_ROW = 52;   // default time range and px per hour (keep WK_ROW in sync with --wk-row)
+  var wkShown = null, wkFrom = WK_FROM;
+  function loadView() { try { return localStorage.getItem(LS_VIEW) === 'week' ? 'week' : 'month'; } catch (e) { return 'month'; } }
+  function isWeek() { return state.tab === 'cal' && state.view === 'week'; }
+  function setView(v) {
+    state.view = v;
+    try { localStorage.setItem(LS_VIEW, v); } catch (e) {}
+    var d = parse(state.selected); state.month = new Date(d.getFullYear(), d.getMonth(), 1);
+    render();
+  }
+  function weekStartOf(s) { return addDays(s, -((parse(s).getDay() - WEEK_START + 7) % 7)); }
+  function weekTitle(first) {
+    var a = parse(first), b = parse(addDays(first, 6));
+    return (a.getMonth() + 1) + '월 ' + a.getDate() + '일 – ' + (a.getMonth() === b.getMonth() ? '' : (b.getMonth() + 1) + '월 ') + b.getDate() + '일';
+  }
+  /* split the column width among overlapping lessons: items = [{ a, b, ... }] sorted by start; sets col / n */
+  function wkLayout(items) {
+    var cluster = [], end = 0;
+    function flush() {
+      var cols = [];
+      cluster.forEach(function (it) { var c = 0; while (cols[c] > it.a) c++; cols[c] = it.b; it.col = c; });
+      cluster.forEach(function (it) { it.n = cols.length; });
+      cluster = [];
+    }
+    items.forEach(function (it) { if (cluster.length && it.a >= end) flush(); if (!cluster.length) end = 0; cluster.push(it); end = Math.max(end, it.b); });
+    flush();
+    return items;
+  }
+  function nowTop() { var n = new Date(); return (n.getHours() * 60 + n.getMinutes() - wkFrom * 60) * WK_ROW / 60; }
+  function renderWeek() {
+    if (!isWeek()) { wkShown = null; return; }
+    var box = $('#wk-scroll'), first = weekStartOf(state.selected), todayS = ymd(new Date()), by = byDate();
+    var days = [0, 1, 2, 3, 4, 5, 6].map(function (i) { return addDays(first, i); });
+    var from = WK_FROM, to = WK_TO, firstStart = 1e9;
+    var cols = days.map(function (d) {
+      var items = (by[d] || []).filter(function (e) { return e.status !== 'cancelled'; }).map(function (e) {
+        var a = toMin(e.start), b = toMin(e.end);
+        if (b <= a) b = a + 30;
+        b = Math.min(b, 1440);
+        from = Math.min(from, Math.floor(a / 60)); to = Math.max(to, Math.ceil(b / 60)); firstStart = Math.min(firstStart, a);
+        return { e: e, a: a, b: b };
+      });
+      return wkLayout(items);
+    });
+    wkFrom = from;
+    var head = '<div class="wk-head"><span></span>' + days.map(function (d) {
+      var dt = parse(d), hol = getHoliday(d), cls = 'wk-dh c' + dt.getDay() + (hol ? ' hol' : '') + (d === todayS ? ' today' : '') + (d === state.selected ? ' sel' : '');
+      return '<button type="button" class="' + cls + '" data-date="' + d + '" aria-label="' + (dt.getMonth() + 1) + '월 ' + dt.getDate() + '일 ' + WD[dt.getDay()] + '요일' + (hol ? ', ' + esc(hol) : '') + '">' +
+        '<span class="wd">' + WD[dt.getDay()] + '</span><span class="wn">' + dt.getDate() + '</span>' +
+        '<span class="lu' + (lunarDay1(d) ? ' m1' : '') + '">' + lunarShort(d) + '</span>' + (hol ? '<span class="hn">' + esc(hol) + '</span>' : '') + '</button>';
+    }).join('') + '</div>';
+    var axis = '';
+    for (var h = from; h < to; h++) axis += '<span style="top:' + (h - from) * WK_ROW + 'px">' + pad(h) + '</span>';
+    var body = '<div class="wk-body" style="--wk-h:' + (to - from) * WK_ROW + 'px"><div class="wk-axis">' + axis + '</div>' + cols.map(function (items, i) {
+      var inner = items.map(function (it) {
+        var e = it.e, st = e.status || 'scheduled', h = Math.max((it.b - it.a) * WK_ROW / 60 - 1, 16);
+        return '<button type="button" class="wkev hh st-' + st + '" style="' + hh(lessonKey(e)) + ';top:' + ((it.a - from * 60) * WK_ROW / 60) + 'px;height:' + h + 'px;left:calc(' + (it.col * 100 / it.n) + '% + 1px);width:calc(' + (100 / it.n) + '% - 2px)" data-ev="' + esc(e.id) + '">' +
+          '<b>' + esc(e.title) + '</b><small>' + esc(e.start) + '–' + esc(e.end) + '</small>' + (e.memo ? '<em>' + esc(e.memo) + '</em>' : '') + '</button>';
+      }).join('');
+      return '<div class="wk-col" data-date="' + days[i] + '">' + inner + (days[i] === todayS ? '<div class="wk-now" style="top:' + nowTop() + 'px"></div>' : '') + '</div>';
+    }).join('') + '</div>';
+    var keep = box.scrollTop, same = wkShown === first;
+    box.innerHTML = head + body;
+    wkShown = first;
+    if (same) { box.scrollTop = keep; return; }
+    // first open of this week: show the current time, else the first lesson, else 08:00
+    var n = new Date(), nm = n.getHours() * 60 + n.getMinutes(), y;
+    if (days.indexOf(todayS) >= 0 && nm >= from * 60 && nm < to * 60) y = (nm - from * 60) * WK_ROW / 60 - WK_ROW * 1.5;
+    else if (firstStart < 1e9) y = (firstStart - from * 60) * WK_ROW / 60 - WK_ROW * 0.5;
+    else y = (8 - from) * WK_ROW;
+    box.scrollTop = Math.max(0, y);
+  }
+  setInterval(function () {
+    var el = $('#wk-scroll .wk-now');
+    if (!el || document.hidden) return;
+    if (wkShown && ymd(new Date()) !== wkToday) { wkToday = ymd(new Date()); renderWeek(); } else el.style.top = nowTop() + 'px';
+  }, 60000);
+  var wkToday = ymd(new Date());
+
+  function render() {
+    assignColors(); renderHead(); renderGrid(); renderAgenda(); renderEnr(); renderTabs();
+    var wk = isWeek();
+    $('#cal').hidden = wk; $('#agenda').hidden = wk; $('#week').hidden = !wk;
+    renderWeek();   // after unhiding: a hidden box cannot be scrolled
+    document.querySelectorAll('.vseg [data-view]').forEach(function (b) { b.setAttribute('aria-selected', String(b.getAttribute('data-view') === state.view)); });
+  }
 
   /* ---------- toast ---------- */
   var toastTimer = null;
@@ -1073,8 +1208,25 @@ body { margin: 0; }
 
   /* ---------- events ---------- */
   function shiftMonth(n) { state.month = new Date(state.month.getFullYear(), state.month.getMonth() + n, 1); render(); }
-  $('#prev').addEventListener('click', function () { shiftMonth(-1); });
-  $('#next').addEventListener('click', function () { shiftMonth(1); });
+  function shiftWeek(n) { state.selected = addDays(state.selected, 7 * n); var d = parse(state.selected); state.month = new Date(d.getFullYear(), d.getMonth(), 1); render(); }
+  function shiftView(n) { if (isWeek()) shiftWeek(n); else shiftMonth(n); }
+  $('#prev').addEventListener('click', function () { shiftView(-1); });
+  $('#next').addEventListener('click', function () { shiftView(1); });
+  document.querySelectorAll('.vseg [data-view]').forEach(function (b) { b.addEventListener('click', function () { setView(b.getAttribute('data-view')); }); });
+  $('#to-week').addEventListener('click', function () { setView('week'); });
+  $('#week').addEventListener('click', function (e) {
+    var ev = e.target.closest('[data-ev]');
+    if (ev) { var x = state.events.find(function (z) { return z.id === ev.getAttribute('data-ev'); }); if (x) openSheet(x); return; }
+    var dh = e.target.closest('.wk-dh');
+    if (dh) { state.selected = dh.getAttribute('data-date'); render(); }
+  });
+  /* swipe left/right on the week grid to change week (mostly vertical moves are scrolling) */
+  var wx = 0, wy = 0;
+  $('#week').addEventListener('touchstart', function (e) { wx = e.touches[0].clientX; wy = e.touches[0].clientY; }, { passive: true });
+  $('#week').addEventListener('touchend', function (e) {
+    var dx = e.changedTouches[0].clientX - wx, dy = e.changedTouches[0].clientY - wy;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > 1.5 * Math.abs(dy)) shiftWeek(dx < 0 ? 1 : -1);
+  }, { passive: true });
   $('#today').addEventListener('click', function () {
     var t = new Date(); state.selected = ymd(t); state.month = new Date(t.getFullYear(), t.getMonth(), 1); render();
   });
